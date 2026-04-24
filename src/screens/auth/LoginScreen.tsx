@@ -134,13 +134,16 @@ export default function LoginScreen({ navigation }: any) {
           <View style={styles.divider} />
         </View>
         <View style={styles.socialRow}>
-          <TouchableOpacity style={styles.socialBtn}>
+          <TouchableOpacity 
+            style={[styles.socialBtn, { flex: undefined, width: '100%' }]}
+            onPress={() => {
+              setRole('pasajero');
+              setUserName('Usuario Google');
+              navigation.replace('App');
+            }}
+          >
             <Ionicons name="logo-google" size={20} color={Colors.textPrimary} />
-            <Text style={styles.socialText}>Google</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.socialBtn}>
-            <Ionicons name="logo-apple" size={20} color={Colors.textPrimary} />
-            <Text style={styles.socialText}>Apple</Text>
+            <Text style={styles.socialText}>Continuar con Google</Text>
           </TouchableOpacity>
         </View>
 

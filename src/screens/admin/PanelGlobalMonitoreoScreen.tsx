@@ -3,19 +3,40 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import MapView, { PROVIDER_GOOGLE, Marker } from 'react-native-maps';
 import { Colors, Spacing, Radius, Shadow } from '../../theme/colors';
 
 // Admin map
 const AdminMap = () => (
   <View style={styles.mapArea}>
-    <View style={styles.mapBg}>
-      {[...Array(8)].map((_, i) => (
-        <View key={`h${i}`} style={[styles.gridH, { top: i * 45 }]} />
+    <MapView
+      provider={PROVIDER_GOOGLE}
+      style={StyleSheet.absoluteFillObject}
+      initialRegion={{
+        latitude: -1.6669,  // Approx Riobamba
+        longitude: -78.6536,
+        latitudeDelta: 2.0, // Zoom out to see Riobamba - Guayaquil
+        longitudeDelta: 2.0,
+      }}
+    >
+      {/* Bus markers */}
+      {[{ id: '312', lat: -2.1894, lng: -79.8891 }, { id: '402', lat: -1.6669, lng: -78.6536 }].map((bus) => (
+        <Marker 
+          key={bus.id} 
+          coordinate={{ latitude: bus.lat, longitude: bus.lng }}
+        >
+          <View style={{ alignItems: 'center' }}>
+            <View style={styles.busLabel}>
+              <Text style={styles.busLabelText}>UNIDAD {bus.id}</Text>
+            </View>
+            <View style={styles.busIcon}>
+              <Ionicons name="bus" size={18} color={Colors.white} />
+            </View>
+          </View>
+        </Marker>
       ))}
-      {[...Array(6)].map((_, i) => (
-        <View key={`v${i}`} style={[styles.gridV, { left: i * 60 }]} />
-      ))}
-    </View>
+    </MapView>
+
     {/* Telemetry overlay */}
     <View style={styles.telOverlay}>
       <View style={styles.telHeader}>
@@ -34,18 +55,8 @@ const AdminMap = () => (
         </View>
       </View>
     </View>
-    {/* Bus markers */}
-    {[{ id: '312', x: 200, y: 80 }, { id: '402', x: 120, y: 160 }].map((bus) => (
-      <View key={bus.id} style={[styles.busMarkerWrap, { left: bus.x, top: bus.y }]}>
-        <View style={styles.busLabel}>
-          <Text style={styles.busLabelText}>UNIDAD {bus.id}</Text>
-        </View>
-        <View style={styles.busIcon}>
-          <Ionicons name="bus" size={18} color={Colors.white} />
-        </View>
-      </View>
-    ))}
-    {/* Zoom */}
+
+    {/* Zoom Controls */}
     <View style={styles.zoomControls}>
       <TouchableOpacity style={styles.zoomBtn}><Ionicons name="add" size={20} color={Colors.textPrimary} /></TouchableOpacity>
       <TouchableOpacity style={styles.zoomBtn}><Ionicons name="remove" size={20} color={Colors.textPrimary} /></TouchableOpacity>
