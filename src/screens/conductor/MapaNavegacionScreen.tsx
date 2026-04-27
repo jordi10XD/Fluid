@@ -1,31 +1,68 @@
 import React from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import MapView, { PROVIDER_GOOGLE, Marker, Polyline } from 'react-native-maps';
+import MapViewDirections from 'react-native-maps-directions';
+import * as Location from 'expo-location';
 import { Colors, Spacing, Radius, Shadow } from '../../theme/colors';
 
-// Fake map for driver
-const OperativeMap = () => (
+const GOOGLE_MAPS_APIKEY = 'AIzaSyDMC7qimoYQ8DsSp6NWDKSI4m9Eea7hhYA';
+const ORIGIN = { latitude: -2.1658274, longitude: -79.6091504 }; // Terminal Milagro
+const DESTINATION = { latitude: -1.6627475, longitude: -78.6633838 }; // Terminal Riobamba
+const WAYPOINTS = [{ latitude: -2.167868, longitude: -79.46075 }]; // Parada Naranjito
+
+// Operative Map with Directions
+const OperativeMap = ({ 
+  location, 
+  onRouteReady 
+}: { 
+  location: Location.LocationObject | null,
+  onRouteReady: (result: any) => void
+}) => (
   <View style={styles.mapContainer}>
-    <View style={styles.mapBg}>
-      {[...Array(10)].map((_, i) => (
-        <View key={`h${i}`} style={[styles.gridH, { top: i * 50 }]} />
-      ))}
-      {[...Array(7)].map((_, i) => (
-        <View key={`v${i}`} style={[styles.gridV, { left: i * 54 }]} />
-      ))}
-      {/* Route path */}
-      <View style={styles.routePath} />
-      {/* Start point */}
-      <View style={styles.startPoint}>
-        <Text style={styles.startPointText}>A</Text>
-      </View>
-      {/* Bus */}
-      <View style={styles.busMarker}>
-        <Ionicons name="bus" size={18} color={Colors.white} />
-      </View>
-    </View>
+    <MapView
+      provider={PROVIDER_GOOGLE}
+      style={StyleSheet.absoluteFillObject}
+      showsUserLocation
+      followsUserLocation
+      showsTraffic={true}
+      initialRegion={{
+        latitude: -1.9,
+        longitude: -79.1,
+        latitudeDelta: 1.5,
+        longitudeDelta: 1.5,
+      }}
+    >
+      <MapViewDirections
+        origin={ORIGIN}
+        destination={DESTINATION}
+        waypoints={WAYPOINTS}
+        apikey={GOOGLE_MAPS_APIKEY}
+        strokeWidth={6}
+        strokeColor={Colors.accent}
+        optimizeWaypoints={true}
+        mode="DRIVING"
+        onReady={onRouteReady}
+        onError={(errorMessage) => {
+          console.log('Error en la ruta:', errorMessage);
+        }}
+      />
+
+      <Marker coordinate={ORIGIN} title="Terminal Milagro">
+        <View style={styles.startPoint}><Text style={styles.startPointText}>M</Text></View>
+      </Marker>
+
+      <Marker coordinate={WAYPOINTS[0]} title="Parada Naranjito">
+        <View style={[styles.startPoint, { backgroundColor: Colors.warning }]}><Text style={styles.startPointText}>N</Text></View>
+      </Marker>
+
+      <Marker coordinate={DESTINATION} title="Terminal Riobamba">
+        <View style={[styles.startPoint, { backgroundColor: Colors.primary }]}><Text style={styles.startPointText}>R</Text></View>
+      </Marker>
+    </MapView>
+
     <View style={styles.zoomControls}>
       <TouchableOpacity style={styles.zoomBtn}><Ionicons name="add" size={20} color={Colors.textPrimary} /></TouchableOpacity>
       <TouchableOpacity style={styles.zoomBtn}><Ionicons name="remove" size={20} color={Colors.textPrimary} /></TouchableOpacity>
@@ -34,6 +71,30 @@ const OperativeMap = () => (
 );
 
 export default function MapaNavegacionScreen({ navigation }: any) {
+  const [location, setLocation] = React.useState<Location.LocationObject | null>(null);
+  const [routeInfo, setRouteInfo] = React.useState({ distance: 0, duration: 0 });
+
+  React.useEffect(() => {
+    (async () => {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') return;
+      
+      // Seguimiento en tiempo real
+      const subscription = await Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.High, distanceInterval: 10 },
+        (loc) => setLocation(loc)
+      );
+      
+      return () => subscription.remove();
+    })();
+  }, []);
+
+  const calculateETA = () => {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() + routeInfo.duration);
+    return now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={Colors.white} />
@@ -43,7 +104,7 @@ export default function MapaNavegacionScreen({ navigation }: any) {
         </TouchableOpacity>
         <View style={{ flex: 1, marginLeft: 12 }}>
           <Text style={styles.headerTitle}>MAPA OPERATIVO</Text>
-          <Text style={styles.headerSub}>Quito → Guayaquil · BUS-402</Text>
+          <Text style={styles.headerSub}>Milagro → Naranjito → Riobamba</Text>
         </View>
         <View style={styles.gpsOnBadge}>
           <View style={styles.gpsDot} />
@@ -53,21 +114,26 @@ export default function MapaNavegacionScreen({ navigation }: any) {
 
       {/* Route progress bar */}
       <View style={styles.progressBar}>
-        <View style={styles.progressFill} />
-        <Text style={styles.progressLabel}>68% completado · 148 km restantes</Text>
+        <View style={[styles.progressFill, { width: '45%' }]} />
+        <Text style={styles.progressLabel}>
+          {routeInfo.distance.toFixed(1)} km totales · {routeInfo.duration.toFixed(0)} min estimados
+        </Text>
       </View>
 
       {/* Map */}
-      <OperativeMap />
+      <OperativeMap 
+        location={location} 
+        onRouteReady={(result) => setRouteInfo({ distance: result.distance, duration: result.duration })}
+      />
 
       {/* Bottom info */}
       <View style={styles.bottomPanel}>
         <View style={styles.infoGrid}>
           {[
-            { label: 'PRÓXIMA PARADA', val: 'Latacunga Terminal', icon: 'flag-outline' },
-            { label: 'DISTANCIA', val: '42 km', icon: 'navigate-outline' },
+            { label: 'PRÓXIMA PARADA', val: 'Terminal Riobamba', icon: 'flag-outline' },
+            { label: 'DISTANCIA', val: `${routeInfo.distance.toFixed(1)} km`, icon: 'navigate-outline' },
             { label: 'VELOCIDAD', val: '72 km/h', icon: 'speedometer-outline' },
-            { label: 'ETA DESTINO', val: '14:30', icon: 'time-outline' },
+            { label: 'ETA DESTINO', val: calculateETA(), icon: 'time-outline' },
           ].map((item, i) => (
             <View key={i} style={styles.infoCell}>
               <Ionicons name={item.icon as any} size={16} color={Colors.accent} />

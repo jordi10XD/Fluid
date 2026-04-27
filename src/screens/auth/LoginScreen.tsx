@@ -32,6 +32,12 @@ export default function LoginScreen({ navigation }: any) {
     navigation.replace('App');
   };
 
+  const handleQuickLogin = (role: UserRole, label: string) => {
+    setRole(role);
+    setUserName(`Dev ${label}`);
+    navigation.replace('App');
+  };
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -62,7 +68,7 @@ export default function LoginScreen({ navigation }: any) {
                   styles.roleChip,
                   selectedRole === r.key && { backgroundColor: r.color, borderColor: r.color },
                 ]}
-                onPress={() => setSelectedRole(r.key)}
+                onPress={() => handleQuickLogin(r.key, r.label)}
               >
                 <Text style={[
                   styles.roleChipText,
@@ -76,8 +82,8 @@ export default function LoginScreen({ navigation }: any) {
           <View style={styles.roleInfo}>
             <Ionicons name="information-circle" size={18} color={Colors.primaryLight} />
             <Text style={styles.roleInfoText}>
-              <Text style={{ fontWeight: '700' }}>Detección Automática: </Text>
-              Nuestro sistema identificará su rol automáticamente (Pasajero, Conductor o Administrador) basado en sus credenciales.
+              <Text style={{ fontWeight: '700' }}>Acceso Rápido (Dev): </Text>
+              Presiona cualquier rol para entrar directamente y probar las interfaces sin escribir credenciales.
             </Text>
           </View>
         </View>

@@ -3,10 +3,33 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import MapView, { PROVIDER_GOOGLE, Marker } from 'react-native-maps';
+import MapViewDirections from 'react-native-maps-directions';
+import * as Location from 'expo-location';
 import { Colors, Spacing, Radius, Shadow } from '../../theme/colors';
+
+const GOOGLE_MAPS_APIKEY = 'AIzaSyDMC7qimoYQ8DsSp6NWDKSI4m9Eea7hhYA';
+const ORIGIN = { latitude: -2.1658274, longitude: -79.6091504 }; // Terminal Milagro
+const DESTINATION = { latitude: -1.6627475, longitude: -78.6633838 }; // Terminal Riobamba
+const WAYPOINTS = [{ latitude: -2.167868, longitude: -79.46075 }]; // Parada Naranjito
 
 export default function DashboardConductorScreen({ navigation }: any) {
   const [timer, setTimer] = useState(8144); // 2:15:44 in seconds
+
+  const [location, setLocation] = useState<Location.LocationObject | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        console.log('Permission to access location was denied');
+        return;
+      }
+
+      let loc = await Location.getCurrentPositionAsync({});
+      setLocation(loc);
+    })();
+  }, []);
 
   useEffect(() => {
     const interval = setInterval(() => setTimer(t => t + 1), 1000);
@@ -74,20 +97,45 @@ export default function DashboardConductorScreen({ navigation }: any) {
       </View>
 
       {/* Map Preview */}
-      <View style={styles.mapPreview}>
-        <View style={styles.mapBg}>
-          {[...Array(8)].map((_, i) => (
-            <View key={`h${i}`} style={[styles.gridH, { top: i * 40 }]} />
-          ))}
-          {/* Route line */}
-          <View style={styles.routeLine} />
-        </View>
+      <TouchableOpacity 
+        style={styles.mapPreview}
+        onPress={() => navigation.navigate('MapaNavegacion')}
+      >
+        <MapView
+          provider={PROVIDER_GOOGLE}
+          style={StyleSheet.absoluteFillObject}
+          showsUserLocation
+          followsUserLocation
+          showsTraffic={true}
+          initialRegion={{
+            latitude: location?.coords.latitude || -2.1658, // Terminal Milagro fallback
+            longitude: location?.coords.longitude || -79.6091,
+            latitudeDelta: 0.05,
+            longitudeDelta: 0.05,
+          }}
+          region={location ? {
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+            latitudeDelta: 0.01,
+            longitudeDelta: 0.01,
+          } : undefined}
+        >
+          <MapViewDirections
+            origin={ORIGIN}
+            destination={DESTINATION}
+            waypoints={WAYPOINTS}
+            apikey={GOOGLE_MAPS_APIKEY}
+            strokeWidth={5}
+            strokeColor={Colors.accent}
+            mode="DRIVING"
+          />
+        </MapView>
         <View style={styles.gpsBadge}>
           <View style={styles.gpsDot} />
           <Text style={styles.gpsText}>UBICACIÓN GPS</Text>
           <Text style={styles.transmitText}>● TRANSMITIENDO</Text>
         </View>
-      </View>
+      </TouchableOpacity>
 
       {/* Telemetry Grid */}
       <View style={styles.telGrid}>
