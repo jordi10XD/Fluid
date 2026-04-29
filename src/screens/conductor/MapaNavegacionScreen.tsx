@@ -8,7 +8,7 @@ import MapViewDirections from 'react-native-maps-directions';
 import * as Location from 'expo-location';
 import { Colors, Spacing, Radius, Shadow } from '../../theme/colors';
 
-const GOOGLE_MAPS_APIKEY = 'AIzaSyDMC7qimoYQ8DsSp6NWDKSI4m9Eea7hhYA';
+const DIRECTIONS_API_KEY = 'AIzaSyDGI28N9BKefrsSmVzftoB5KJGmw-fUtXk';
 const ORIGIN = { latitude: -2.1658274, longitude: -79.6091504 }; // Terminal Milagro
 const DESTINATION = { latitude: -1.6627475, longitude: -78.6633838 }; // Terminal Riobamba
 const WAYPOINTS = [{ latitude: -2.167868, longitude: -79.46075 }]; // Parada Naranjito
@@ -39,7 +39,7 @@ const OperativeMap = ({
         origin={ORIGIN}
         destination={DESTINATION}
         waypoints={WAYPOINTS}
-        apikey={GOOGLE_MAPS_APIKEY}
+        apikey={DIRECTIONS_API_KEY}
         strokeWidth={6}
         strokeColor={Colors.accent}
         optimizeWaypoints={true}

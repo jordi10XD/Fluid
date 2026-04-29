@@ -1,11 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, KeyboardAvoidingView, Platform, StatusBar, Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as WebBrowser from 'expo-web-browser';
+// using Supabase OAuth directly
+import { makeRedirectUri } from 'expo-auth-session';
 import { Colors, Spacing, Radius, Shadow } from '../../theme/colors';
 import { useRole, UserRole } from '../../context/RoleContext';
+import { supabase } from '../../lib/supabase';
+
+WebBrowser.maybeCompleteAuthSession();
 
 const ROLES: { key: UserRole; label: string; desc: string; color: string }[] = [
   { key: 'pasajero', label: 'Pasajero', desc: 'Consultar rutas y rastrear buses', color: Colors.accent },
@@ -36,6 +42,83 @@ export default function LoginScreen({ navigation }: any) {
     setRole(role);
     setUserName(`Dev ${label}`);
     navigation.replace('App');
+  };
+
+  const redirectUri = makeRedirectUri({
+    scheme: 'com.logicube.fluidapp',
+  });
+
+  const getParamsFromUrl = (url: string) => {
+    const hash = url.split('#')[1];
+    if (!hash) return {};
+    return hash.split('&').reduce((acc, item) => {
+      const [key, value] = item.split('=');
+      acc[key] = value;
+      return acc;
+    }, {} as Record<string, string>);
+  };
+
+  const handleUserRedirection = async (user: any) => {
+    if (!user || !user.email) return;
+    
+    try {
+      // Usamos las tablas public.driver_profiles y public.users que ya configuramos
+      const { data, error } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (data && data.role === 'operator') {
+        setRole('conductor');
+        setUserName(user.email.split('@')[0]);
+        Alert.alert('¡Bienvenido Conductor!', 'Se ha detectado tu perfil de conductor.');
+      } else {
+        setRole('pasajero');
+        setUserName(user.email.split('@')[0]);
+      }
+      navigation.replace('App');
+    } catch (err) {
+      console.error(err);
+      Alert.alert('Error', 'No se pudo verificar el rol del usuario.');
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUri,
+          skipBrowserRedirect: true,
+        },
+      });
+
+      if (error) throw error;
+      if (!data?.url) return;
+
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUri);
+
+      if (result.type === 'success' && result.url) {
+        const params = getParamsFromUrl(result.url);
+
+        if (params.access_token && params.refresh_token) {
+          const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+            access_token: params.access_token,
+            refresh_token: params.refresh_token,
+          });
+          
+          if (sessionError) throw sessionError;
+          
+          if (sessionData.user) {
+            handleUserRedirection(sessionData.user);
+          }
+        }
+      }
+    } catch (error: any) {
+      console.error(error);
+      Alert.alert('Error', error.message || 'No se pudo iniciar sesión');
+    }
   };
 
   return (
@@ -142,11 +225,7 @@ export default function LoginScreen({ navigation }: any) {
         <View style={styles.socialRow}>
           <TouchableOpacity 
             style={[styles.socialBtn, { flex: undefined, width: '100%' }]}
-            onPress={() => {
-              setRole('pasajero');
-              setUserName('Usuario Google');
-              navigation.replace('App');
-            }}
+            onPress={handleGoogleLogin}
           >
             <Ionicons name="logo-google" size={20} color={Colors.textPrimary} />
             <Text style={styles.socialText}>Continuar con Google</Text>

@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, TextInput,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, TextInput, Alert, ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, Shadow } from '../../theme/colors';
+import { supabase } from '../../lib/supabase';
 
 const UNITS = [
   { num: '042', code: 'PBA-4509', model: 'Hino Selekt', cap: 45, status: 'EN RUTA', statusColor: Colors.success, active: '042', base: '' },
@@ -25,6 +26,35 @@ const ROUTES = [
 
 export default function GestionUnidadesRutasScreen() {
   const [tab, setTab] = useState('Unidades');
+  const [drivers, setDrivers] = useState<any[]>([]);
+  const [newDriverEmail, setNewDriverEmail] = useState('');
+  const [loadingDrivers, setLoadingDrivers] = useState(false);
+
+  const fetchDrivers = async () => {
+    setLoadingDrivers(true);
+    const { data, error } = await supabase.from('driver_profiles').select('*').order('created_at', { ascending: false });
+    if (!error && data) {
+      setDrivers(data);
+    }
+    setLoadingDrivers(false);
+  };
+
+  useEffect(() => {
+    if (tab === 'Conductores') {
+      fetchDrivers();
+    }
+  }, [tab]);
+
+  const handleAddDriver = async () => {
+    if (!newDriverEmail.trim()) return;
+    const { error } = await supabase.from('driver_profiles').insert([{ email: newDriverEmail.trim().toLowerCase() }]);
+    if (error) {
+      Alert.alert('Error', error.message);
+    } else {
+      setNewDriverEmail('');
+      fetchDrivers();
+    }
+  };
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -42,7 +72,7 @@ export default function GestionUnidadesRutasScreen() {
 
       {/* Tabs */}
       <View style={styles.tabRow}>
-        {['Unidades', 'Rutas'].map((t) => (
+        {['Unidades', 'Rutas', 'Conductores'].map((t) => (
           <TouchableOpacity key={t} style={[styles.tab, tab === t && styles.tabActive]} onPress={() => setTab(t)}>
             <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>{t}</Text>
           </TouchableOpacity>
@@ -179,6 +209,53 @@ export default function GestionUnidadesRutasScreen() {
               )}
             </View>
           ))}
+        </View>
+      )}
+
+      {tab === 'Conductores' && (
+        <View style={styles.routeSection}>
+          <View style={styles.routesHeader}>
+            <Text style={styles.routesTitle}>Perfiles de Conductor</Text>
+          </View>
+          
+          <View style={[styles.searchRow, { marginHorizontal: 0, marginBottom: Spacing.lg }]}>
+            <Ionicons name="mail-outline" size={16} color={Colors.textMuted} />
+            <TextInput 
+              style={styles.searchInput} 
+              placeholder="Correo del nuevo conductor" 
+              placeholderTextColor={Colors.textMuted}
+              value={newDriverEmail}
+              onChangeText={setNewDriverEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
+            <TouchableOpacity onPress={handleAddDriver}>
+              <Ionicons name="add-circle" size={32} color={Colors.primary} />
+            </TouchableOpacity>
+          </View>
+
+          {loadingDrivers ? (
+            <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 20 }} />
+          ) : (
+            <View style={{ gap: Spacing.sm }}>
+              {drivers.map((d, i) => (
+                <View key={d.id} style={styles.unitCard}>
+                  <View style={[styles.unitLeft, { width: 40 }]}>
+                    <Ionicons name="person-circle" size={36} color={Colors.primary} />
+                  </View>
+                  <View style={styles.unitInfo}>
+                    <Text style={styles.unitCode}>{d.email}</Text>
+                    <Text style={styles.unitModel}>Añadido: {new Date(d.created_at).toLocaleDateString()}</Text>
+                  </View>
+                </View>
+              ))}
+              {drivers.length === 0 && (
+                <Text style={{ textAlign: 'center', color: Colors.textMuted, marginTop: Spacing.lg }}>
+                  No hay conductores registrados.
+                </Text>
+              )}
+            </View>
+          )}
         </View>
       )}
 

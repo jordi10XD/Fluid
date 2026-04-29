@@ -2,6 +2,7 @@
   "expo": {
     "name": "FluidApp",
     "slug": "FluidApp",
+    "scheme": "com.logicube.fluidapp",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -14,7 +15,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.FluidApp"
+      "bundleIdentifier": "com.logicube.fluidapp"
     },
     "android": {
       "adaptiveIcon": {
@@ -23,7 +24,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.FluidApp",
+      "package": "com.logicube.fluidapp",
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSyDMC7qimoYQ8DsSp6NWDKSI4m9Eea7hhYA"
