@@ -8,7 +8,7 @@ import MapViewDirections from 'react-native-maps-directions';
 import * as Location from 'expo-location';
 import { Colors, Spacing, Radius, Shadow } from '../../theme/colors';
 
-const DIRECTIONS_API_KEY = 'AIzaSyDGI28N9BKefrsSmVzftoB5KJGmw-fUtXk';
+const DIRECTIONS_API_KEY = process.env.EXPO_PUBLIC_DIRECTIONS_API_KEY || '';
 const ORIGIN = { latitude: -2.1658274, longitude: -79.6091504 }; // Terminal Milagro
 const DESTINATION = { latitude: -1.6627475, longitude: -78.6633838 }; // Terminal Riobamba
 const WAYPOINTS = [{ latitude: -2.167868, longitude: -79.46075 }]; // Parada Naranjito
@@ -17,6 +17,7 @@ export default function DashboardConductorScreen({ navigation }: any) {
   const [timer, setTimer] = useState(8144); // 2:15:44 in seconds
 
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
+  const [routeStats, setRouteStats] = useState({ distance: 424, duration: 465 }); // Default fallbacks
 
   useEffect(() => {
     (async () => {
@@ -41,6 +42,13 @@ export default function DashboardConductorScreen({ navigation }: any) {
     const m = Math.floor((s % 3600) / 60).toString().padStart(2, '0');
     const sec = (s % 60).toString().padStart(2, '0');
     return `${h}:${m}:${sec}`;
+  };
+
+  const formatDuration = (mins: number) => {
+    if (mins < 60) return `${Math.round(mins)} min`;
+    const h = Math.floor(mins / 60);
+    const m = Math.round(mins % 60);
+    return `${h} h ${m} min`;
   };
 
   return (
@@ -71,7 +79,7 @@ export default function DashboardConductorScreen({ navigation }: any) {
               </View>
               <View>
                 <Text style={styles.statLabel}>TIEMPO ESTIMADO</Text>
-                <Text style={styles.statVal}>07:45 H</Text>
+                <Text style={styles.statVal}>{formatDuration(routeStats.duration).toUpperCase()}</Text>
               </View>
             </View>
             <View style={styles.statItem}>
@@ -80,7 +88,7 @@ export default function DashboardConductorScreen({ navigation }: any) {
               </View>
               <View>
                 <Text style={styles.statLabel}>DISTANCIA TOTAL</Text>
-                <Text style={styles.statVal}>424 KM</Text>
+                <Text style={styles.statVal}>{routeStats.distance.toFixed(1)} KM</Text>
               </View>
             </View>
             <View style={styles.statItem}>
@@ -121,13 +129,16 @@ export default function DashboardConductorScreen({ navigation }: any) {
           } : undefined}
         >
           <MapViewDirections
-            origin={ORIGIN}
+            origin={location ? { latitude: location.coords.latitude, longitude: location.coords.longitude } : ORIGIN}
             destination={DESTINATION}
             waypoints={WAYPOINTS}
             apikey={DIRECTIONS_API_KEY}
             strokeWidth={5}
             strokeColor={Colors.accent}
             mode="DRIVING"
+            onReady={(result) => {
+              setRouteStats({ distance: result.distance, duration: result.duration });
+            }}
           />
         </MapView>
         <View style={styles.gpsBadge}>

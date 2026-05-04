@@ -8,7 +8,7 @@ import MapViewDirections from 'react-native-maps-directions';
 import * as Location from 'expo-location';
 import { Colors, Spacing, Radius, Shadow } from '../../theme/colors';
 
-const DIRECTIONS_API_KEY = 'AIzaSyDGI28N9BKefrsSmVzftoB5KJGmw-fUtXk';
+const DIRECTIONS_API_KEY = process.env.EXPO_PUBLIC_DIRECTIONS_API_KEY || '';
 const ORIGIN = { latitude: -2.1658274, longitude: -79.6091504 }; // Terminal Milagro
 const DESTINATION = { latitude: -1.6627475, longitude: -78.6633838 }; // Terminal Riobamba
 const WAYPOINTS = [{ latitude: -2.167868, longitude: -79.46075 }]; // Parada Naranjito
@@ -20,55 +20,61 @@ const OperativeMap = ({
 }: { 
   location: Location.LocationObject | null,
   onRouteReady: (result: any) => void
-}) => (
-  <View style={styles.mapContainer}>
-    <MapView
-      provider={PROVIDER_GOOGLE}
-      style={StyleSheet.absoluteFillObject}
-      showsUserLocation
-      followsUserLocation
-      showsTraffic={true}
-      initialRegion={{
-        latitude: -1.9,
-        longitude: -79.1,
-        latitudeDelta: 1.5,
-        longitudeDelta: 1.5,
-      }}
-    >
-      <MapViewDirections
-        origin={ORIGIN}
-        destination={DESTINATION}
-        waypoints={WAYPOINTS}
-        apikey={DIRECTIONS_API_KEY}
-        strokeWidth={6}
-        strokeColor={Colors.accent}
-        optimizeWaypoints={true}
-        mode="DRIVING"
-        onReady={onRouteReady}
-        onError={(errorMessage) => {
-          console.log('Error en la ruta:', errorMessage);
-        }}
-      />
+}) => {
+  const currentOrigin = location 
+    ? { latitude: location.coords.latitude, longitude: location.coords.longitude } 
+    : ORIGIN;
 
-      <Marker coordinate={ORIGIN} title="Terminal Milagro">
-        <View style={styles.startPoint}><Text style={styles.startPointText}>M</Text></View>
-      </Marker>
+  return (
+    <View style={styles.mapContainer}>
+      <MapView
+        provider={PROVIDER_GOOGLE}
+        style={StyleSheet.absoluteFillObject}
+        showsUserLocation
+        followsUserLocation
+        showsTraffic={true}
+        initialRegion={{
+          latitude: -1.9,
+          longitude: -79.1,
+          latitudeDelta: 1.5,
+          longitudeDelta: 1.5,
+        }}
+      >
+        <MapViewDirections
+          origin={currentOrigin}
+          destination={DESTINATION}
+          waypoints={WAYPOINTS}
+          apikey={DIRECTIONS_API_KEY}
+          strokeWidth={6}
+          strokeColor={Colors.accent}
+          optimizeWaypoints={true}
+          mode="DRIVING"
+          onReady={onRouteReady}
+          onError={(errorMessage) => {
+            console.log('Error en la ruta:', errorMessage);
+          }}
+        />
+
+        <Marker coordinate={ORIGIN} title="Terminal Milagro">
+          <View style={styles.startPoint}><Text style={styles.startPointText}>M</Text></View>
+        </Marker>
 
       <Marker coordinate={WAYPOINTS[0]} title="Parada Naranjito">
         <View style={[styles.startPoint, { backgroundColor: Colors.warning }]}><Text style={styles.startPointText}>N</Text></View>
       </Marker>
 
-      <Marker coordinate={DESTINATION} title="Terminal Riobamba">
-        <View style={[styles.startPoint, { backgroundColor: Colors.primary }]}><Text style={styles.startPointText}>R</Text></View>
-      </Marker>
-    </MapView>
+        <Marker coordinate={DESTINATION} title="Terminal Riobamba">
+          <View style={[styles.startPoint, { backgroundColor: Colors.primary }]}><Text style={styles.startPointText}>R</Text></View>
+        </Marker>
+      </MapView>
 
-    <View style={styles.zoomControls}>
-      <TouchableOpacity style={styles.zoomBtn}><Ionicons name="add" size={20} color={Colors.textPrimary} /></TouchableOpacity>
-      <TouchableOpacity style={styles.zoomBtn}><Ionicons name="remove" size={20} color={Colors.textPrimary} /></TouchableOpacity>
+      <View style={styles.zoomControls}>
+        <TouchableOpacity style={styles.zoomBtn}><Ionicons name="add" size={20} color={Colors.textPrimary} /></TouchableOpacity>
+        <TouchableOpacity style={styles.zoomBtn}><Ionicons name="remove" size={20} color={Colors.textPrimary} /></TouchableOpacity>
+      </View>
     </View>
-  </View>
-);
+  );
+};
 
 export default function MapaNavegacionScreen({ navigation }: any) {
   const [location, setLocation] = React.useState<Location.LocationObject | null>(null);
@@ -88,6 +94,13 @@ export default function MapaNavegacionScreen({ navigation }: any) {
       return () => subscription.remove();
     })();
   }, []);
+
+  const formatDuration = (mins: number) => {
+    if (mins < 60) return `${Math.round(mins)} min`;
+    const h = Math.floor(mins / 60);
+    const m = Math.round(mins % 60);
+    return `${h} h ${m} min`;
+  };
 
   const calculateETA = () => {
     const now = new Date();
@@ -116,7 +129,7 @@ export default function MapaNavegacionScreen({ navigation }: any) {
       <View style={styles.progressBar}>
         <View style={[styles.progressFill, { width: '45%' }]} />
         <Text style={styles.progressLabel}>
-          {routeInfo.distance.toFixed(1)} km totales · {routeInfo.duration.toFixed(0)} min estimados
+          {routeInfo.distance.toFixed(1)} km totales · {formatDuration(routeInfo.duration)} estimados
         </Text>
       </View>
 
