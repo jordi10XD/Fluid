@@ -62,14 +62,26 @@ export default function LoginScreen({ navigation }: any) {
     if (!user || !user.email) return;
     
     try {
-      // Usamos las tablas public.driver_profiles y public.users que ya configuramos
-      const { data, error } = await supabase
-        .from('users')
-        .select('role')
-        .eq('id', user.id)
+      // 1) Verificar directamente en driver_profiles si el correo es de conductor
+      const { data: driverMatch } = await supabase
+        .from('driver_profiles')
+        .select('id')
+        .eq('email', user.email.toLowerCase())
         .maybeSingle();
 
-      if (data && data.role === 'operator') {
+      const isDriver = !!driverMatch;
+
+      // 2) Actualizar/crear el registro en public.users con el rol correcto
+      const newRole = isDriver ? 'operator' : 'passenger';
+      await supabase
+        .from('users')
+        .upsert(
+          { id: user.id, email: user.email, role: newRole },
+          { onConflict: 'id' }
+        );
+
+      // 3) Redirigir según el rol
+      if (isDriver) {
         setRole('conductor');
         setUserName(user.email.split('@')[0]);
         Alert.alert('¡Bienvenido Conductor!', 'Se ha detectado tu perfil de conductor.');

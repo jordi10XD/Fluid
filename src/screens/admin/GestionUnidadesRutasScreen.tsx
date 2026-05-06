@@ -24,22 +24,22 @@ const UNITS: Unit[] = [
 
 const ROUTES: Route[] = [
   {
-    code: 'R-001', name: 'TRONCAL SIERRA CENTRAL',
+    code: 'R-001', name: 'MILAGRO — RIOBAMBA',
     stops: [
-      { label: 'ORIGEN',             name: 'Quito — Terminal Quitumbe' },
-      { label: 'PARADA INTERMEDIA',  name: 'Latacunga — Terminal Terrestre' },
-      { label: 'PARADA INTERMEDIA',  name: 'Ambato — Ingahurco' },
+      { label: 'ORIGEN',             name: 'Milagro — Terminal Terrestre' },
+      { label: 'PARADA INTERMEDIA',  name: 'Naranjito — Parada Central' },
       { label: 'DESTINO',            name: 'Riobamba — Terminal Principal' },
     ],
+    km: '185', time: '3h 30m',
   },
   {
-    code: 'R-012', name: 'RUTA DEL SOL EXPRESS',
+    code: 'R-002', name: 'RIOBAMBA — MILAGRO (RETORNO)',
     stops: [
-      { label: 'ORIGEN',             name: 'Guayaquil — Terminal Pascuales' },
-      { label: 'PARADA INTERMEDIA',  name: 'Santa Elena — Centro' },
-      { label: 'DESTINO',            name: 'Salinas — Malecón' },
+      { label: 'ORIGEN',             name: 'Riobamba — Terminal Principal' },
+      { label: 'PARADA INTERMEDIA',  name: 'Naranjito — Parada Central' },
+      { label: 'DESTINO',            name: 'Milagro — Terminal Terrestre' },
     ],
-    km: '142.5', time: '2h 15m',
+    km: '185', time: '3h 30m',
   },
 ];
 
