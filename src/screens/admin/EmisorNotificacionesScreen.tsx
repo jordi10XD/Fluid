@@ -6,6 +6,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, Shadow } from '../../theme/colors';
 
+import { supabase } from '../../lib/supabase';
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 type AudienceKey = 'all' | 'passengers' | 'drivers';
 type NotifStatus = 'ENTREGADO' | 'EN PROCESO' | 'COMPLETADO';
@@ -55,25 +57,43 @@ export default function EmisorNotificacionesScreen() {
   const bodyOk  = body.trim().length  >= 10;
   const canSend = titleOk && bodyOk && sendState === 'idle';
 
-  /** TODO: replace with push notification API + `supabase.from('notificaciones').insert(...)` */
+  /**
+   * Envía la notificación a través de la Edge Function 'send-notification',
+   * que retransmite a OneSignal REST API.
+   */
   const handleSend = async () => {
     if (!canSend) {
       Alert.alert('Campos requeridos', 'El título (mín. 3 chars) y el mensaje (mín. 10 chars) son obligatorios.');
       return;
     }
     setSendState('sending');
-    await new Promise(r => setTimeout(r, 1000)); // simulate network
 
-    const newEntry: HistoryItem = {
-      id:       `n${Date.now()}`,
-      title:    title.trim(),
-      desc:     body.trim().slice(0, 60) + (body.length > 60 ? '...' : ''),
-      audience: AUDIENCE_LABEL[audience],
-      time:     'AHORA',
-      status:   'EN PROCESO',
-    };
-    setHistory(prev => [newEntry, ...prev]);
-    setSendState('sent');
+    try {
+      const { data, error } = await supabase.functions.invoke('send-notification', {
+        body: {
+          title: title.trim(),
+          message: body.trim(),
+          audience,
+        },
+      });
+
+      if (error) throw error;
+
+      const newEntry: HistoryItem = {
+        id:       `n${Date.now()}`,
+        title:    title.trim(),
+        desc:     body.trim().slice(0, 60) + (body.length > 60 ? '...' : ''),
+        audience: AUDIENCE_LABEL[audience],
+        time:     'AHORA',
+        status:   'ENTREGADO',
+      };
+      setHistory(prev => [newEntry, ...prev]);
+      setSendState('sent');
+    } catch (err: any) {
+      console.error('Error enviando notificación:', err);
+      Alert.alert('Error', err.message || 'No se pudo enviar la notificación.');
+      setSendState('idle');
+    }
   };
 
   /**

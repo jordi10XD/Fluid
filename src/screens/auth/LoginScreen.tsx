@@ -20,7 +20,7 @@ const ROLES: { key: UserRole; label: string; desc: string; color: string }[] = [
 ];
 
 export default function LoginScreen({ navigation }: any) {
-  const { setRole, setUserName } = useRole();
+  const { setRole, setUserName, setSupabaseUserId } = useRole();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
@@ -80,7 +80,10 @@ export default function LoginScreen({ navigation }: any) {
           { onConflict: 'id' }
         );
 
-      // 3) Redirigir según el rol
+      // 3) Vincular dispositivo en OneSignal con el UUID de Supabase
+      setSupabaseUserId(user.id);
+
+      // 4) Redirigir según el rol
       if (isDriver) {
         setRole('conductor');
         setUserName(user.email.split('@')[0]);
