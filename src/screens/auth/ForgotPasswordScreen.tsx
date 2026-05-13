@@ -5,10 +5,31 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, Shadow } from '../../theme/colors';
+import { supabase } from '../../lib/supabase';
+
+import { makeRedirectUri } from 'expo-auth-session';
 
 export default function ForgotPasswordScreen({ navigation }: any) {
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
+
+  const redirectUri = makeRedirectUri({
+    scheme: 'com.logicube.fluidapp',
+    path: 'reset-password'
+  });
+
+  const handleReset = async () => {
+    if (!email) return;
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: redirectUri
+      });
+      if (error) throw error;
+      setSent(true);
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'No se pudo enviar el correo de recuperación.');
+    }
+  };
 
   return (
     <KeyboardAvoidingView
@@ -45,7 +66,7 @@ export default function ForgotPasswordScreen({ navigation }: any) {
 
           <TouchableOpacity
             style={styles.sendBtn}
-            onPress={() => { setSent(true); }}
+            onPress={handleReset}
           >
             <Text style={styles.sendBtnText}>Enviar Código</Text>
             <Ionicons name="arrow-forward" size={18} color={Colors.white} />

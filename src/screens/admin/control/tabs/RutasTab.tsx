@@ -115,13 +115,13 @@ function RutaModal({ visible, mode, initialData, onClose, onSave }: RutaModalPro
     setForm(
       initialData
         ? {
-            codigo:       initialData.codigo,
-            nombre:       initialData.nombre,
-            origen:       initialData.origen,
-            destino:      initialData.destino,
-            paradas:      initialData.paradas,
-            distancia_km: initialData.distancia_km,
-            tiempo_min:   initialData.tiempo_min,
+            codigo:       initialData.codigo || '',
+            nombre:       initialData.nombre || '',
+            origen:       initialData.origen || '',
+            destino:      initialData.destino || '',
+            paradas:      initialData.paradas || [],
+            distancia_km: initialData.distancia_km || 0,
+            tiempo_min:   initialData.tiempo_min || 0,
           }
         : EMPTY_DRAFT,
     );
@@ -354,8 +354,8 @@ export default function RutasTab() {
   const [editTarget, setEditTarget] = useState<Ruta | undefined>();
 
   const filtered = items.filter(r =>
-    r.codigo.toLowerCase().includes(search.toLowerCase()) ||
-    r.nombre.toLowerCase().includes(search.toLowerCase()),
+    (r.codigo || '').toLowerCase().includes(search.toLowerCase()) ||
+    (r.nombre || '').toLowerCase().includes(search.toLowerCase()),
   );
 
   function openCreate() { setEditTarget(undefined); setModalOpen(true); }

@@ -27,15 +27,26 @@ export default function LoginScreen({ navigation }: any) {
   const [selectedRole, setSelectedRole] = useState<UserRole>('pasajero');
   const [error, setError] = useState(false);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!email || !password) {
       setError(true);
       return;
     }
     setError(false);
-    setRole(selectedRole);
-    setUserName(email.split('@')[0] || 'Usuario');
-    navigation.replace('App');
+    
+    try {
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password
+      });
+
+      if (signInError) throw signInError;
+      if (data.user) {
+        await proceedWithUser(data.user);
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Credenciales incorrectas');
+    }
   };
 
   const handleQuickLogin = (role: UserRole, label: string) => {
@@ -58,44 +69,39 @@ export default function LoginScreen({ navigation }: any) {
     }, {} as Record<string, string>);
   };
 
-  const handleUserRedirection = async (user: any) => {
-    if (!user || !user.email) return;
-    
+  const proceedWithUser = async (user: any) => {
     try {
-      // 1) Verificar directamente en driver_profiles si el correo es de conductor
-      const { data: driverMatch } = await supabase
-        .from('driver_profiles')
-        .select('id')
-        .eq('email', user.email.toLowerCase())
+      const { data: userData, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', user.id)
         .maybeSingle();
 
-      const isDriver = !!driverMatch;
-
-      // 2) Actualizar/crear el registro en public.users con el rol correcto
-      const newRole = isDriver ? 'operator' : 'passenger';
-      await supabase
-        .from('users')
-        .upsert(
-          { id: user.id, email: user.email, role: newRole },
-          { onConflict: 'id' }
-        );
-
-      // 3) Vincular dispositivo en OneSignal con el UUID de Supabase
-      setSupabaseUserId(user.id);
-
-      // 4) Redirigir según el rol
-      if (isDriver) {
-        setRole('conductor');
-        setUserName(user.email.split('@')[0]);
-        Alert.alert('¡Bienvenido Conductor!', 'Se ha detectado tu perfil de conductor.');
-      } else {
-        setRole('pasajero');
-        setUserName(user.email.split('@')[0]);
+      if (!userData) {
+        throw new Error('Usuario no encontrado en la base de datos');
       }
+
+      setSupabaseUserId(user.id);
+      
+      let finalRole: UserRole = 'pasajero';
+      let name = userData.nombres ? userData.nombres : user.email.split('@')[0];
+
+      if (userData.role === 'admin') finalRole = 'admin';
+      else if (userData.role === 'operator') finalRole = 'conductor';
+
+      if (finalRole === 'conductor') {
+        const { data: driverData } = await supabase.from('driver_profiles').select('nombre').eq('id', user.id).maybeSingle();
+        if (driverData && driverData.nombre) name = driverData.nombre;
+        Alert.alert('¡Bienvenido Conductor!', 'Se ha detectado tu perfil de conductor.');
+      }
+
+      setRole(finalRole);
+      setUserName(name);
       navigation.replace('App');
-    } catch (err) {
+
+    } catch (err: any) {
       console.error(err);
-      Alert.alert('Error', 'No se pudo verificar el rol del usuario.');
+      Alert.alert('Error', err.message || 'Error al cargar el perfil.');
     }
   };
 
@@ -126,7 +132,22 @@ export default function LoginScreen({ navigation }: any) {
           if (sessionError) throw sessionError;
           
           if (sessionData.user) {
-            handleUserRedirection(sessionData.user);
+            const { data: existingUser } = await supabase
+              .from('users')
+              .select('id')
+              .eq('id', sessionData.user.id)
+              .maybeSingle();
+
+            await supabase.auth.signOut();
+
+            if (existingUser) {
+              setEmail(sessionData.user.email || '');
+              setPassword('');
+              Alert.alert('Cuenta reconocida', 'Por favor, ingresa tu contraseña para acceder.');
+            } else {
+              Alert.alert('Cuenta no existe', 'Por favor, completa tu registro.');
+              navigation.navigate('Register', { prefillEmail: sessionData.user.email });
+            }
           }
         }
       }

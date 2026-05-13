@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, Image,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, Shadow } from '../../theme/colors';
 import { useRole } from '../../context/RoleContext';
+import { supabase } from '../../lib/supabase';
 
 const MENU_ITEMS = [
   { icon: 'person-outline', title: 'Mis Datos', desc: 'Información personal y operativa' },
@@ -14,7 +15,52 @@ const MENU_ITEMS = [
 ];
 
 export default function PerfilUsuarioScreen({ navigation }: any) {
-  const { role, userName } = useRole();
+  const { role, setRole, setUserName, setSupabaseUserId } = useRole();
+  const [profileData, setProfileData] = useState<any>(null);
+
+  useEffect(() => {
+    loadProfile();
+  }, []);
+
+  const loadProfile = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: userData } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (userData) {
+        if (userData.role === 'operator') {
+          const { data: driverData } = await supabase.from('driver_profiles').select('*').eq('id', user.id).maybeSingle();
+          if (driverData) {
+            setProfileData({ ...userData, ...driverData, realName: driverData.nombre });
+          } else {
+            setProfileData({ ...userData, realName: userData.nombres });
+          }
+        } else {
+          setProfileData({ ...userData, realName: userData.nombres || user.email?.split('@')[0] });
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setRole('pasajero');
+    setUserName('Usuario');
+    setSupabaseUserId(null);
+    navigation.replace('Login');
+  };
+
+  const displayName = profileData?.realName || 'Cargando...';
+  const displayEmail = profileData?.email || '...';
+  const displayPhone = profileData?.telefono || '...';
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -37,14 +83,14 @@ export default function PerfilUsuarioScreen({ navigation }: any) {
             <Ionicons name="checkmark" size={12} color={Colors.white} />
           </View>
         </View>
-        <Text style={styles.userName}>
-          {role === 'admin' ? 'Terminal Terrestre Quitumbe' :
-           role === 'conductor' ? 'Carlos Rivadeneira' :
-           userName}
-        </Text>
+        <Text style={styles.userName}>{displayName}</Text>
         <View style={styles.idRow}>
-          <Ionicons name="card-outline" size={14} color={Colors.textSecondary} />
-          <Text style={styles.idText}>ID Unidad: RF-G04</Text>
+          <Ionicons name="mail-outline" size={14} color={Colors.textSecondary} />
+          <Text style={styles.idText}>{displayEmail}</Text>
+        </View>
+        <View style={styles.idRow}>
+          <Ionicons name="call-outline" size={14} color={Colors.textSecondary} />
+          <Text style={styles.idText}>{displayPhone}</Text>
         </View>
         <View style={styles.secureBadge}>
           <Ionicons name="lock-closed-outline" size={12} color={Colors.primary} />
@@ -78,12 +124,9 @@ export default function PerfilUsuarioScreen({ navigation }: any) {
       </View>
 
       {/* Logout */}
-      <TouchableOpacity style={styles.logoutBtn} onPress={() => navigation.replace('Login')}>
+      <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
         <Ionicons name="log-out-outline" size={20} color={Colors.danger} />
         <Text style={styles.logoutText}>Cerrar Sesión</Text>
-        <View style={styles.logoutBadge}>
-          <Text style={styles.logoutBadgeText}>RF-G02</Text>
-        </View>
       </TouchableOpacity>
       <Text style={styles.version}>VERSIÓN DEL SISTEMA 4.2.0-ALPHA</Text>
       <View style={{ height: 80 }} />

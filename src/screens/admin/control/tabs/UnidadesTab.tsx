@@ -130,9 +130,9 @@ function UnidadModal({ visible, mode, initialData, onClose, onSave }: UnidadModa
     if (!visible) return;
     setForm(
       initialData
-        ? { placa: initialData.placa, numero_interno: initialData.numero_interno,
-            marca: initialData.marca, capacidad: initialData.capacidad,
-            estado: initialData.estado }
+        ? { placa: initialData.placa || '', numero_interno: initialData.numero_interno || '',
+            marca: initialData.marca || '', capacidad: initialData.capacidad || 0,
+            estado: initialData.estado || 'Activo' }
         : EMPTY_DRAFT,
     );
     setErrors({});
@@ -363,8 +363,8 @@ export default function UnidadesTab() {
 
   // Filtra localmente sin petición extra a Supabase
   const filtered = items.filter(u =>
-    u.placa.toLowerCase().includes(search.toLowerCase()) ||
-    u.numero_interno.includes(search),
+    (u.placa || '').toLowerCase().includes(search.toLowerCase()) ||
+    (u.numero_interno || '').includes(search),
   );
 
   function openCreate() {

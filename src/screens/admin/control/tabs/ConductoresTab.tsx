@@ -116,12 +116,12 @@ function ConductorModal({ visible, mode, initialData, onClose, onSave }: Conduct
     setForm(
       initialData
         ? {
-            nombre:       initialData.nombre,
-            cedula:       initialData.cedula,
-            email:        initialData.email,
-            telefono:     initialData.telefono,
-            licencia_num: initialData.licencia_num,
-            licencia_tipo: initialData.licencia_tipo,
+            nombre:       initialData.nombre || '',
+            cedula:       initialData.cedula || '',
+            email:        initialData.email || '',
+            telefono:     initialData.telefono || '',
+            licencia_num: initialData.licencia_num || '',
+            licencia_tipo: initialData.licencia_tipo || 'D',
           }
         : EMPTY_DRAFT,
     );
@@ -322,8 +322,8 @@ export default function ConductoresTab() {
   const [editTarget, setEditTarget] = useState<Conductor | undefined>();
 
   const filtered = items.filter(c =>
-    c.nombre.toLowerCase().includes(search.toLowerCase()) ||
-    c.cedula.includes(search),
+    (c.nombre || '').toLowerCase().includes(search.toLowerCase()) ||
+    (c.cedula || '').includes(search),
   );
 
   function openCreate() { setEditTarget(undefined); setModalOpen(true); }

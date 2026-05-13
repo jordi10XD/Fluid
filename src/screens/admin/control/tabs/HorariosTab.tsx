@@ -146,11 +146,11 @@ function HorarioModal({ visible, mode, initialData, rutas, onClose, onSave }: Ho
       setHora(h ?? '08');
       setMin(m  ?? '00');
       setForm({
-        ruta_id:     initialData.ruta_id,
-        ruta_nombre: initialData.ruta_nombre,
-        hora_salida: initialData.hora_salida,
-        frecuencia:  initialData.frecuencia,
-        estado:      initialData.estado,
+        ruta_id:     initialData.ruta_id || '',
+        ruta_nombre: initialData.ruta_nombre || '',
+        hora_salida: initialData.hora_salida || '',
+        frecuencia:  initialData.frecuencia || 'Diario',
+        estado:      initialData.estado || 'Activo',
       });
     } else {
       setHora('08'); setMin('00');
@@ -410,8 +410,8 @@ export default function HorariosTab() {
   const [editTarget, setEditTarget] = useState<Horario | undefined>();
 
   const filtered = items.filter(h =>
-    h.ruta_nombre.toLowerCase().includes(search.toLowerCase()) ||
-    h.hora_salida.includes(search),
+    (h.ruta_nombre || '').toLowerCase().includes(search.toLowerCase()) ||
+    (h.hora_salida || '').includes(search),
   );
 
   function openCreate() { setEditTarget(undefined); setModalOpen(true); }
