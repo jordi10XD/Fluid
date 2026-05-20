@@ -1,19 +1,55 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, StatusBar,
+  TextInput, StatusBar, ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, Shadow } from '../../theme/colors';
-
-const ORIGENES = ['Terminal Quitumbe', 'Terminal Terrestre GYE', 'Terminal Guamaní', 'Terminal Norte'];
-const DESTINOS = ['Terminal Pascuales', 'Terminal Central Cuenca', 'Manta Terminal', 'Baños de Agua Santa'];
+import { supabase } from '../../lib/supabase';
 
 export default function RouteSearchScreen({ navigation }: any) {
-  const [origen, setOrigen] = useState('Terminal Central');
-  const [destino, setDestino] = useState('Centro Costa Norte');
-  const [fecha] = useState('Lunes, 24 Oct 2024');
+  const [origen, setOrigen] = useState('');
+  const [destino, setDestino] = useState('');
+  const [fecha] = useState(new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' }));
   const [filtro, setFiltro] = useState('Siguientes Salidas');
+  const [trips, setTrips] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    handleSearch();
+  }, []);
+
+  const handleSearch = async () => {
+    setLoading(true);
+    let routeQuery = supabase.from('routes').select('id');
+    
+    if (origen.trim()) routeQuery = routeQuery.ilike('origen', `%${origen.trim()}%`);
+    if (destino.trim()) routeQuery = routeQuery.ilike('destino', `%${destino.trim()}%`);
+    
+    const { data: routeData } = await routeQuery;
+    const routeIds = routeData ? routeData.map(r => r.id) : [];
+
+    if (routeIds.length === 0 && (origen.trim() || destino.trim())) {
+      setTrips([]);
+      setLoading(false);
+      return;
+    }
+
+    let tripQuery = supabase.from('trips')
+      .select(`
+        id, departure_time, estimated_arrival, status,
+        routes ( nombre, origen, destino, tiempo_min ),
+        buses ( internal_number, plate_number )
+      `);
+      
+    if (routeIds.length > 0) {
+      tripQuery = tripQuery.in('route_id', routeIds);
+    }
+    
+    const { data: tripData } = await tripQuery.order('departure_time', { ascending: true });
+    if (tripData) setTrips(tripData);
+    setLoading(false);
+  };
 
   const swap = () => {
     const tmp = origen;
@@ -69,110 +105,87 @@ export default function RouteSearchScreen({ navigation }: any) {
         </View>
         <TouchableOpacity
           style={styles.searchBtn}
-          onPress={() => navigation.navigate('ResultadosHorarios')}
+          onPress={handleSearch}
         >
           <Ionicons name="search" size={18} color={Colors.white} />
           <Text style={styles.searchBtnText}>Buscar Rutas</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Recents */}
-      <View style={styles.section}>
-        <Text style={styles.sectionLabel}>BÚSQUEDAS RECIENTES</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {['Terminal Central → Costa Norte', 'Estadio → Quitumbe', 'Guayaquil → Cuenca'].map((r, i) => (
-            <View key={i} style={styles.recentChip}>
-              <Ionicons name="time-outline" size={14} color={Colors.textSecondary} />
-              <Text style={styles.recentText}>{r}</Text>
-            </View>
-          ))}
-        </ScrollView>
-      </View>
-
-      {/* Filter tabs */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow}>
-        {['Siguientes Salidas', 'Madrugada', 'Tarde', 'Noche'].map((f) => (
-          <TouchableOpacity
-            key={f}
-            style={[styles.filterChip, filtro === f && styles.filterChipActive]}
-            onPress={() => setFiltro(f)}
-          >
-            <Text style={[styles.filterText, filtro === f && styles.filterTextActive]}>{f}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-
-      {/* Info banner */}
-      <View style={styles.infoBanner}>
-        <Ionicons name="information-circle-outline" size={18} color={Colors.accent} />
-        <Text style={styles.infoText}>
-          <Text style={{ fontWeight: '700' }}>Modo Suscriptor: </Text>
-          Suscríbete a un viaje para ver la posición del bus en tiempo real. Ideal para familiares o personas esperando a alguien en la terminal.
-        </Text>
-      </View>
-
       {/* Results */}
       <View style={styles.section}>
-        <Text style={styles.sectionLabel}>VIAJES ACTIVOS</Text>
-        {SCHEDULES.map((s, i) => (
-          <View key={i} style={styles.scheduleCard}>
-            {/* Status indicator */}
-            <View style={styles.statusRow}>
-              <View style={[styles.statusDot, { backgroundColor: s.activo ? Colors.success : Colors.textMuted }]} />
-              <Text style={[styles.statusText, { color: s.activo ? Colors.success : Colors.textMuted }]}>
-                {s.activo ? 'EN RUTA · EN VIVO' : 'AÚN NO INICIA'}
-              </Text>
-              <View style={styles.busBadge}>
-                <Ionicons name="bus-outline" size={11} color={Colors.textSecondary} />
-                <Text style={styles.busBadgeText}>{s.bus}</Text>
-              </View>
-            </View>
-
-            {/* Times */}
-            <View style={styles.timeRow}>
-              <View>
-                <Text style={styles.timeMain}>{s.salida}</Text>
-                <Text style={styles.timeTag}>SALIDA</Text>
-              </View>
-              <View style={styles.durationPill}>
-                <Ionicons name="time-outline" size={14} color={Colors.textSecondary} />
-                <Text style={styles.durationText}>{s.duracion}</Text>
-              </View>
-              <View style={{ alignItems: 'flex-end' }}>
-                <Text style={styles.timeMain}>{s.llegada}</Text>
-                <Text style={styles.timeTag}>LLEGADA EST.</Text>
-              </View>
-            </View>
-
-            <Text style={styles.empresaName}>{s.empresa}</Text>
-
-            {/* Subscribe action */}
-            <TouchableOpacity
-              style={[styles.subscribeBtn, !s.activo && styles.subscribeBtnDisabled]}
-              disabled={!s.activo}
-            >
-              <Ionicons
-                name={s.activo ? 'location' : 'lock-closed-outline'}
-                size={16}
-                color={s.activo ? Colors.white : Colors.textMuted}
-              />
-              <Text style={[styles.subscribeBtnText, !s.activo && styles.subscribeBtnTextDisabled]}>
-                {s.activo ? 'Seguir Viaje en Tiempo Real' : 'Viaje no iniciado'}
-              </Text>
-            </TouchableOpacity>
+        <Text style={styles.sectionLabel}>VIAJES ACTIVOS Y PROGRAMADOS</Text>
+        {loading ? (
+          <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 20 }} />
+        ) : trips.length === 0 ? (
+          <View style={{ alignItems: 'center', padding: 20 }}>
+            <Ionicons name="bus-outline" size={40} color={Colors.textMuted} />
+            <Text style={{ marginTop: 10, color: Colors.textSecondary, fontWeight: '600' }}>No se encontraron viajes</Text>
           </View>
-        ))}
+        ) : (
+          trips.map((s, i) => {
+            const isActivo = s.status === 'en_route';
+            const salida = s.departure_time ? new Date(s.departure_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--';
+            const llegada = s.estimated_arrival ? new Date(s.estimated_arrival).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--';
+            const duracion = s.routes?.tiempo_min ? `${Math.floor(s.routes.tiempo_min / 60)}h ${s.routes.tiempo_min % 60}m` : '--';
+            const empresa = s.routes?.nombre || 'Ruta Desconocida';
+            const bus = s.buses?.internal_number || s.buses?.plate_number || 'N/A';
+
+            return (
+              <View key={s.id} style={styles.scheduleCard}>
+                {/* Status indicator */}
+                <View style={styles.statusRow}>
+                  <View style={[styles.statusDot, { backgroundColor: isActivo ? Colors.success : Colors.textMuted }]} />
+                  <Text style={[styles.statusText, { color: isActivo ? Colors.success : Colors.textMuted }]}>
+                    {isActivo ? 'EN RUTA · EN VIVO' : s.status === 'scheduled' ? 'PROGRAMADO' : s.status.toUpperCase()}
+                  </Text>
+                  <View style={styles.busBadge}>
+                    <Ionicons name="bus-outline" size={11} color={Colors.textSecondary} />
+                    <Text style={styles.busBadgeText}>UNIDAD {bus}</Text>
+                  </View>
+                </View>
+
+                {/* Times */}
+                <View style={styles.timeRow}>
+                  <View>
+                    <Text style={styles.timeMain}>{salida}</Text>
+                    <Text style={styles.timeTag}>SALIDA</Text>
+                  </View>
+                  <View style={styles.durationPill}>
+                    <Ionicons name="time-outline" size={14} color={Colors.textSecondary} />
+                    <Text style={styles.durationText}>{duracion}</Text>
+                  </View>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={styles.timeMain}>{llegada}</Text>
+                    <Text style={styles.timeTag}>LLEGADA EST.</Text>
+                  </View>
+                </View>
+
+                <Text style={styles.empresaName}>{empresa}</Text>
+
+                {/* Subscribe action */}
+                <TouchableOpacity
+                  style={[styles.subscribeBtn, !isActivo && styles.subscribeBtnDisabled]}
+                  disabled={!isActivo}
+                >
+                  <Ionicons
+                    name={isActivo ? 'location' : 'lock-closed-outline'}
+                    size={16}
+                    color={isActivo ? Colors.white : Colors.textMuted}
+                  />
+                  <Text style={[styles.subscribeBtnText, !isActivo && styles.subscribeBtnTextDisabled]}>
+                    {isActivo ? 'Seguir Viaje en Tiempo Real' : 'Viaje no iniciado'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            );
+          })
+        )}
       </View>
       <View style={{ height: 80 }} />
     </ScrollView>
   );
 }
-
-const SCHEDULES = [
-  { salida: '08:30', llegada: '12:15', duracion: '3h 45m', empresa: 'SwiftPath Express', bus: 'BUS-402', activo: true },
-  { salida: '09:15', llegada: '13:25', duracion: '4h 10m', empresa: 'Logística Horizonte Azul', bus: 'BUS-115', activo: false },
-  { salida: '10:45', llegada: '14:40', duracion: '3h 55m', empresa: 'Urban Flow Coaches', bus: 'BUS-088', activo: true },
-];
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
@@ -198,20 +211,6 @@ const styles = StyleSheet.create({
   searchBtnText: { color: Colors.white, fontSize: 16, fontWeight: '700' },
   section: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg },
   sectionLabel: { fontSize: 11, fontWeight: '700', color: Colors.textSecondary, letterSpacing: 1, marginBottom: 10 },
-  filterRow: { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md },
-  filterChip: {
-    paddingHorizontal: 16, paddingVertical: 8, borderRadius: Radius.full,
-    backgroundColor: Colors.white, marginRight: 8, borderWidth: 1, borderColor: Colors.border,
-  },
-  filterChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  filterText: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
-  filterTextActive: { color: Colors.white },
-  recentChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.white,
-    borderRadius: Radius.full, paddingHorizontal: 12, paddingVertical: 8,
-    marginRight: 8, borderWidth: 1, borderColor: Colors.border,
-  },
-  recentText: { fontSize: 12, color: Colors.textSecondary },
   scheduleCard: {
     backgroundColor: Colors.white, borderRadius: Radius.lg, padding: Spacing.md,
     marginBottom: Spacing.md, ...Shadow.sm,

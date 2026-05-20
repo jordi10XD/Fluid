@@ -19,6 +19,7 @@ import ReporteIncidenciasScreen from '../screens/conductor/ReporteIncidenciasScr
 import PanelGlobalMonitoreoScreen from '../screens/admin/PanelGlobalMonitoreoScreen';
 import ControlScreen from '../screens/admin/control';
 import EmisorNotificacionesScreen from '../screens/admin/EmisorNotificacionesScreen';
+import ViajesScreen from '../screens/admin/ViajesScreen';
 
 import { useRole } from '../context/RoleContext';
 
@@ -120,6 +121,7 @@ export function AdminTabs({ navigation }: any) {
             Monitor: focused ? 'analytics' : 'analytics-outline',
             Control: focused ? 'options' : 'options-outline',
             Notif:   focused ? 'megaphone' : 'megaphone-outline',
+            Viajes:  focused ? 'bus' : 'bus-outline',
             Perfil:  focused ? 'person' : 'person-outline',
           };
           return <Ionicons name={icons[route.name]} size={24} color={color} />;
@@ -128,6 +130,7 @@ export function AdminTabs({ navigation }: any) {
     >
       <Tab.Screen name="Monitor" component={PanelGlobalMonitoreoScreen} />
       <Tab.Screen name="Control" component={ControlScreen} />
+      <Tab.Screen name="Viajes" component={ViajesScreen} />
       <Tab.Screen name="Notif" component={EmisorNotificacionesScreen} />
       <Tab.Screen name="Perfil">
         {() => <PerfilUsuarioScreen navigation={navigation} />}

@@ -13,18 +13,13 @@ import { supabase } from '../../lib/supabase';
 
 WebBrowser.maybeCompleteAuthSession();
 
-const ROLES: { key: UserRole; label: string; desc: string; color: string }[] = [
-  { key: 'pasajero', label: 'Pasajero', desc: 'Consultar rutas y rastrear buses', color: Colors.accent },
-  { key: 'conductor', label: 'Conductor', desc: 'Gestionar ruta asignada', color: Colors.success },
-  { key: 'admin', label: 'Administrador', desc: 'Panel de control logístico', color: Colors.warning },
-];
+
 
 export default function LoginScreen({ navigation }: any) {
   const { setRole, setUserName, setSupabaseUserId } = useRole();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<UserRole>('pasajero');
   const [error, setError] = useState(false);
 
   const handleLogin = async () => {
@@ -49,11 +44,7 @@ export default function LoginScreen({ navigation }: any) {
     }
   };
 
-  const handleQuickLogin = (role: UserRole, label: string) => {
-    setRole(role);
-    setUserName(`Dev ${label}`);
-    navigation.replace('App');
-  };
+
 
   const redirectUri = makeRedirectUri({
     scheme: 'com.logicube.fluidapp',
@@ -138,14 +129,10 @@ export default function LoginScreen({ navigation }: any) {
               .eq('id', sessionData.user.id)
               .maybeSingle();
 
-            await supabase.auth.signOut();
-
             if (existingUser) {
-              setEmail(sessionData.user.email || '');
-              setPassword('');
-              Alert.alert('Cuenta reconocida', 'Por favor, ingresa tu contraseña para acceder.');
+              await proceedWithUser(sessionData.user);
             } else {
-              Alert.alert('Cuenta no existe', 'Por favor, completa tu registro.');
+              Alert.alert('Casi listo', 'Por favor, completa tu registro.');
               navigation.navigate('Register', { prefillEmail: sessionData.user.email });
             }
           }
@@ -176,36 +163,7 @@ export default function LoginScreen({ navigation }: any) {
           <Text style={styles.subtitle}>Gestiona tus operaciones con autoridad técnica.</Text>
         </View>
 
-        {/* Role Selector */}
-        <View style={styles.roleContainer}>
-          <Text style={styles.sectionLabel}>SELECCIONE SU ROL</Text>
-          <View style={styles.roleRow}>
-            {ROLES.map((r) => (
-              <TouchableOpacity
-                key={r.key}
-                style={[
-                  styles.roleChip,
-                  selectedRole === r.key && { backgroundColor: r.color, borderColor: r.color },
-                ]}
-                onPress={() => handleQuickLogin(r.key, r.label)}
-              >
-                <Text style={[
-                  styles.roleChipText,
-                  selectedRole === r.key && { color: Colors.white },
-                ]}>
-                  {r.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <View style={styles.roleInfo}>
-            <Ionicons name="information-circle" size={18} color={Colors.primaryLight} />
-            <Text style={styles.roleInfoText}>
-              <Text style={{ fontWeight: '700' }}>Acceso Rápido (Dev): </Text>
-              Presiona cualquier rol para entrar directamente y probar las interfaces sin escribir credenciales.
-            </Text>
-          </View>
-        </View>
+
 
         {/* Form */}
         <View style={styles.form}>
@@ -291,19 +249,6 @@ const styles = StyleSheet.create({
   logoText: { fontSize: 18, fontWeight: '700', color: Colors.primary },
   title: { fontSize: 36, fontWeight: '800', color: Colors.primary, marginBottom: 6 },
   subtitle: { fontSize: 15, color: Colors.textSecondary },
-  roleContainer: { marginBottom: Spacing.lg },
-  roleRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.sm, marginTop: Spacing.xs },
-  roleChip: {
-    flex: 1, paddingVertical: 10, borderRadius: Radius.full,
-    borderWidth: 1.5, borderColor: Colors.border, alignItems: 'center',
-    backgroundColor: Colors.white,
-  },
-  roleChipText: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
-  roleInfo: {
-    flexDirection: 'row', backgroundColor: '#EEF2FF', borderRadius: Radius.md,
-    padding: Spacing.md, gap: Spacing.sm,
-  },
-  roleInfoText: { flex: 1, fontSize: 13, color: Colors.primaryLight, lineHeight: 18 },
   form: { marginBottom: Spacing.lg },
   sectionLabel: { fontSize: 11, fontWeight: '700', color: Colors.textSecondary, letterSpacing: 1, marginBottom: 6 },
   input: {

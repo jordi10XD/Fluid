@@ -15,6 +15,11 @@ import {
   KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import MapView, { PROVIDER_GOOGLE, Marker } from 'react-native-maps';
+import MapViewDirections from 'react-native-maps-directions';
+import * as Location from 'expo-location';
+
+const DIRECTIONS_API_KEY = process.env.EXPO_PUBLIC_DIRECTIONS_API_KEY || '';
 
 import { Colors, Spacing, Radius, Shadow } from '../../../../theme/colors';
 import { fetchList, createItem, updateItem, deleteItem } from '../shared/supabaseList';
@@ -27,6 +32,11 @@ import {
 // 1. TYPES
 // ══════════════════════════════════════════════════════════════════════════════
 
+interface Coord {
+  latitude: number;
+  longitude: number;
+}
+
 interface Ruta {
   id:           string;
   codigo:       string;       // ej: R-001
@@ -36,6 +46,9 @@ interface Ruta {
   paradas:      string[];     // paradas intermedias
   distancia_km: number;
   tiempo_min:   number;       // tiempo estimado en minutos
+  origen_coords?: Coord | null;
+  destino_coords?: Coord | null;
+  paradas_coords?: Coord[];
 }
 
 type RutaDraft = Omit<Ruta, 'id'>;
@@ -49,6 +62,9 @@ const EMPTY_DRAFT: RutaDraft = {
   paradas:      [],
   distancia_km: 0,
   tiempo_min:   0,
+  origen_coords: null,
+  destino_coords: null,
+  paradas_coords: [],
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -122,6 +138,9 @@ function RutaModal({ visible, mode, initialData, onClose, onSave }: RutaModalPro
             paradas:      initialData.paradas || [],
             distancia_km: initialData.distancia_km || 0,
             tiempo_min:   initialData.tiempo_min || 0,
+            origen_coords: initialData.origen_coords || null,
+            destino_coords: initialData.destino_coords || null,
+            paradas_coords: initialData.paradas_coords || [],
           }
         : EMPTY_DRAFT,
     );
@@ -131,6 +150,31 @@ function RutaModal({ visible, mode, initialData, onClose, onSave }: RutaModalPro
 
   const set = <K extends keyof RutaDraft>(field: K, value: RutaDraft[K]) =>
     setForm(prev => ({ ...prev, [field]: value }));
+
+  const [mapVisible, setMapVisible] = useState(false);
+  const [mapMode, setMapMode] = useState<'origen' | 'destino' | 'paradas'>('origen');
+
+  const handleMapPress = async (e: any) => {
+    const coord = e.nativeEvent.coordinate;
+    let addressName = 'Ubicación seleccionada';
+    try {
+      const [address] = await Location.reverseGeocodeAsync(coord);
+      if (address) {
+        addressName = [address.street, address.streetNumber, address.city].filter(Boolean).join(', ') || address.name || addressName;
+      }
+    } catch (err) {}
+
+    if (mapMode === 'origen') {
+      set('origen_coords', coord);
+      set('origen', addressName);
+    } else if (mapMode === 'destino') {
+      set('destino_coords', coord);
+      set('destino', addressName);
+    } else if (mapMode === 'paradas') {
+      set('paradas_coords', [...(form.paradas_coords || []), coord]);
+      set('paradas', [...form.paradas, addressName]);
+    }
+  };
 
   // ── Gestión de paradas (chips) ──────────────────────────────────────────────
   function addParada() {
@@ -142,6 +186,9 @@ function RutaModal({ visible, mode, initialData, onClose, onSave }: RutaModalPro
 
   function removeParada(index: number) {
     set('paradas', form.paradas.filter((_, i) => i !== index));
+    if (form.paradas_coords && form.paradas_coords.length > index) {
+      set('paradas_coords', form.paradas_coords.filter((_, i) => i !== index));
+    }
   }
 
   // ── Validación ──────────────────────────────────────────────────────────────
@@ -189,6 +236,10 @@ function RutaModal({ visible, mode, initialData, onClose, onSave }: RutaModalPro
           </View>
 
           <ScrollView style={modal.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            <TouchableOpacity style={modal.openMapBtn} onPress={() => setMapVisible(true)}>
+              <Ionicons name="map" size={20} color="#FFF" />
+              <Text style={modal.openMapText}>Seleccionar en Mapa Interactivo</Text>
+            </TouchableOpacity>
 
             {/* Código */}
             <FormField label="Código de Ruta" error={errors.codigo}>
@@ -314,6 +365,78 @@ function RutaModal({ visible, mode, initialData, onClose, onSave }: RutaModalPro
           </View>
 
         </View>
+
+        {/* Map Picker Modal */}
+        <Modal visible={mapVisible} animationType="slide" onRequestClose={() => setMapVisible(false)}>
+          <View style={styles.mapScreenContainer}>
+            <View style={styles.mapHeader}>
+              <TouchableOpacity onPress={() => setMapVisible(false)}>
+                <Ionicons name="arrow-back" size={24} color={Colors.primary} />
+              </TouchableOpacity>
+              <Text style={styles.mapHeaderTitle}>Selección en Mapa</Text>
+              <View style={{ width: 24 }} />
+            </View>
+            
+            <View style={styles.mapModeSelector}>
+              {(['origen', 'destino', 'paradas'] as const).map(m => (
+                <TouchableOpacity 
+                  key={m} 
+                  style={[styles.mapModeBtn, mapMode === m && styles.mapModeBtnActive]}
+                  onPress={() => setMapMode(m)}
+                >
+                  <Text style={[styles.mapModeText, mapMode === m && styles.mapModeTextActive]}>
+                    {m.toUpperCase()}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={{ flex: 1 }}>
+              <MapView
+                provider={PROVIDER_GOOGLE}
+                style={StyleSheet.absoluteFillObject}
+                onPress={handleMapPress}
+                initialRegion={{
+                  latitude: form.origen_coords?.latitude || -2.1658,
+                  longitude: form.origen_coords?.longitude || -79.6091,
+                  latitudeDelta: 0.5,
+                  longitudeDelta: 0.5,
+                }}
+              >
+                {form.origen_coords && (
+                  <Marker coordinate={form.origen_coords} title="Origen" pinColor={Colors.success} />
+                )}
+                {form.destino_coords && (
+                  <Marker coordinate={form.destino_coords} title="Destino" pinColor={Colors.primary} />
+                )}
+                {form.paradas_coords?.map((coord, i) => (
+                  <Marker key={i} coordinate={coord} title={`Parada ${i+1}`} pinColor={Colors.warning} />
+                ))}
+
+                {form.origen_coords && form.destino_coords && (
+                  <MapViewDirections
+                    origin={form.origen_coords}
+                    destination={form.destino_coords}
+                    waypoints={form.paradas_coords}
+                    apikey={DIRECTIONS_API_KEY}
+                    strokeWidth={4}
+                    strokeColor={Colors.accent}
+                    optimizeWaypoints={true}
+                    onReady={(res) => {
+                      set('distancia_km', parseFloat(res.distance.toFixed(1)));
+                      set('tiempo_min', Math.ceil(res.duration));
+                    }}
+                  />
+                )}
+              </MapView>
+              <View style={styles.mapInstructions}>
+                <Text style={styles.mapInstructionsText}>
+                  Toca en el mapa para establecer: <Text style={{fontWeight: '800', color: Colors.primary}}>{mapMode.toUpperCase()}</Text>
+                </Text>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -340,6 +463,21 @@ const modal = StyleSheet.create({
   saveBtn:         { flex: 2, paddingVertical: 14, borderRadius: Radius.md, backgroundColor: Colors.primary, alignItems: 'center', minHeight: 50 },
   saveBtnDisabled: { opacity: 0.6 },
   saveText:        { fontSize: 15, fontWeight: '700', color: '#FFF' },
+  openMapBtn:      { flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.accent, borderRadius: Radius.md, paddingVertical: 14, marginBottom: Spacing.lg },
+  openMapText:     { color: '#FFF', fontWeight: '700', fontSize: 15 },
+});
+
+const styles = StyleSheet.create({
+  mapScreenContainer: { flex: 1, backgroundColor: '#FFF' },
+  mapHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.lg, paddingTop: 50, paddingBottom: 15, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: Colors.border },
+  mapHeaderTitle: { fontSize: 16, fontWeight: '800', color: Colors.textPrimary },
+  mapModeSelector: { flexDirection: 'row', padding: Spacing.md, backgroundColor: Colors.white, gap: 8 },
+  mapModeBtn: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border },
+  mapModeBtnActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  mapModeText: { fontSize: 12, fontWeight: '700', color: Colors.textSecondary },
+  mapModeTextActive: { color: Colors.white },
+  mapInstructions: { position: 'absolute', bottom: 40, alignSelf: 'center', backgroundColor: '#FFF', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 24, ...Shadow.md },
+  mapInstructionsText: { fontSize: 14, color: Colors.textPrimary },
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

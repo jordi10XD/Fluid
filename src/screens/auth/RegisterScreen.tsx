@@ -80,7 +80,7 @@ export default function RegisterScreen({ navigation, route }: any) {
             } else {
               setEmail(sessionData.user.email || '');
               setIsGoogleFlow(true);
-              Alert.alert('Casi listo', 'Por favor, completa tus datos y elige una contraseña para tu cuenta.');
+              Alert.alert('Casi listo', 'Por favor, completa tus datos para crear tu cuenta.');
             }
           }
         }
@@ -92,8 +92,8 @@ export default function RegisterScreen({ navigation, route }: any) {
   };
 
   const handleRegister = async () => {
-    if (!nombres || !email || !password) {
-      Alert.alert('Error', 'Nombres, email y contraseña son obligatorios.');
+    if (!nombres || !email || (!isGoogleFlow && !password)) {
+      Alert.alert('Error', isGoogleFlow ? 'Nombres y email son obligatorios.' : 'Nombres, email y contraseña son obligatorios.');
       return;
     }
 
@@ -101,10 +101,8 @@ export default function RegisterScreen({ navigation, route }: any) {
       let userId: string | undefined;
 
       if (isGoogleFlow) {
-        const { data, error: updateError } = await supabase.auth.updateUser({
-          password: password,
-        });
-        if (updateError) throw updateError;
+        const { data, error: userError } = await supabase.auth.getUser();
+        if (userError) throw userError;
         userId = data.user?.id;
       } else {
         const { data, error: signUpError } = await supabase.auth.signUp({
@@ -116,14 +114,33 @@ export default function RegisterScreen({ navigation, route }: any) {
       }
 
       if (userId) {
+        // Check if email is registered as a driver by the admin
+        const { data: driverData } = await supabase
+          .from('driver_profiles')
+          .select('id')
+          .eq('email', email.trim())
+          .maybeSingle();
+
+        const finalRole = driverData ? 'operator' : 'passenger';
+
         const { error: insertError } = await supabase.from('users').insert({
           id: userId,
           email: email.trim(),
           nombres: nombres.trim(),
           apellidos: apellidos.trim(),
           telefono: phone.trim(),
-          role: 'passenger',
+          role: finalRole,
         });
+
+        if (insertError) throw insertError;
+
+        // If it's a driver, link their profile to the new auth UUID
+        if (driverData) {
+          await supabase
+            .from('driver_profiles')
+            .update({ id: userId })
+            .eq('email', email.trim());
+        }
 
         if (insertError) throw insertError;
 
@@ -197,15 +214,19 @@ export default function RegisterScreen({ navigation, route }: any) {
             autoCapitalize="none"
             editable={!isGoogleFlow}
           />
-          <Text style={styles.label}>CONTRASEÑA</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="••••••••"
-            placeholderTextColor={Colors.textMuted}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-          />
+          {!isGoogleFlow && (
+            <>
+              <Text style={styles.label}>CONTRASEÑA</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="••••••••"
+                placeholderTextColor={Colors.textMuted}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+              />
+            </>
+          )}
           <Text style={styles.label}>TELÉFONO</Text>
           <View style={styles.phoneRow}>
             <View style={styles.phoneCode}>

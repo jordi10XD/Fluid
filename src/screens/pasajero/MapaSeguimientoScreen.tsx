@@ -1,71 +1,42 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, Dimensions,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import MapView, { PROVIDER_GOOGLE, Marker } from 'react-native-maps';
+import * as Location from 'expo-location';
+import { supabase } from '../../lib/supabase';
 import { Colors, Spacing, Radius, Shadow } from '../../theme/colors';
 
 const { width, height } = Dimensions.get('window');
 
-// Grid lines for the fake map
-const MapPlaceholder = () => (
-  <View style={styles.mapContainer}>
-    {/* Fake map with grid lines */}
-    <View style={styles.mapBg}>
-      {[...Array(12)].map((_, i) => (
-        <View key={`h${i}`} style={[styles.gridLineH, { top: (i + 1) * 50 }]} />
-      ))}
-      {[...Array(8)].map((_, i) => (
-        <View key={`v${i}`} style={[styles.gridLineV, { left: (i + 1) * 50 }]} />
-      ))}
-      {/* Diagonal road lines */}
-      <View style={styles.road1} />
-      <View style={styles.road2} />
-    </View>
-    {/* Bus marker */}
-    <View style={styles.busMarker}>
-      <View style={styles.busLabel}>
-        <View style={styles.activeDot} />
-        <Text style={styles.busLabelText}>UNIT 402</Text>
-      </View>
-      <View style={styles.busIcon}>
-        <Ionicons name="bus" size={22} color={Colors.white} />
-        <View style={styles.dirDot} />
-      </View>
-    </View>
-    {/* Zoom controls */}
-    <View style={styles.zoomControls}>
-      <TouchableOpacity style={styles.zoomBtn}>
-        <Ionicons name="add" size={22} color={Colors.textPrimary} />
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.zoomBtn}>
-        <Ionicons name="remove" size={22} color={Colors.textPrimary} />
-      </TouchableOpacity>
-    </View>
-    {/* Telemetry card */}
-    <View style={styles.telCard}>
-      <View style={styles.telHeader}>
-        <Text style={styles.telTitle}>TELEMETRÍA RF-G04</Text>
-        <View style={styles.telDot} />
-      </View>
-      <View style={styles.telRow}>
-        <Text style={styles.telLabel}>Velocidad</Text>
-        <Text style={styles.telVal}>72 <Text style={styles.telUnit}>km/h</Text></Text>
-      </View>
-      <View style={styles.telRow}>
-        <Text style={styles.telLabel}>Altitud</Text>
-        <Text style={styles.telVal}>2,850 <Text style={styles.telUnit}>msnm</Text></Text>
-      </View>
-    </View>
-    {/* GPS badge */}
-    <View style={styles.gpsBadge}>
-      <Ionicons name="radio-outline" size={14} color={Colors.white} />
-      <Text style={styles.gpsText}>PRECISIÓN CINÉTICA · GPS: 0.8m (Active)</Text>
-    </View>
-  </View>
-);
+
 
 export default function MapaSeguimientoScreen({ navigation }: any) {
+  const [buses, setBuses] = useState<any[]>([]);
+  const [location, setLocation] = useState<Location.LocationObject | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === 'granted') {
+        let loc = await Location.getCurrentPositionAsync({});
+        setLocation(loc);
+      }
+    })();
+
+    const fetchBuses = async () => {
+      const { data, error } = await supabase.from('live_bus_locations').select('*');
+      if (!error && data) {
+        setBuses(data);
+      }
+    };
+
+    fetchBuses();
+    const interval = setInterval(fetchBuses, 10000); // Polling every 10s
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
@@ -81,7 +52,61 @@ export default function MapaSeguimientoScreen({ navigation }: any) {
       </View>
 
       {/* Map */}
-      <MapPlaceholder />
+      <View style={styles.mapContainer}>
+        <MapView
+          provider={PROVIDER_GOOGLE}
+          style={StyleSheet.absoluteFillObject}
+          showsUserLocation
+          initialRegion={{
+            latitude: location ? location.coords.latitude : -1.9,
+            longitude: location ? location.coords.longitude : -79.1,
+            latitudeDelta: 1.5,
+            longitudeDelta: 1.5,
+          }}
+        >
+          {buses.map((bus, i) => (
+            <Marker
+              key={i}
+              coordinate={{ latitude: bus.latitude, longitude: bus.longitude }}
+              title={`Unidad ${bus.internal_number || bus.plate_number}`}
+              description={`Velocidad: ${bus.speed_kmh} km/h`}
+            >
+              <View style={styles.busMarkerLive}>
+                <Ionicons name="bus" size={20} color={Colors.white} />
+              </View>
+            </Marker>
+          ))}
+        </MapView>
+        <View style={styles.zoomControls}>
+          <TouchableOpacity style={styles.zoomBtn}>
+            <Ionicons name="add" size={22} color={Colors.textPrimary} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.zoomBtn}>
+            <Ionicons name="remove" size={22} color={Colors.textPrimary} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Telemetry card */}
+        <View style={styles.telCard}>
+          <View style={styles.telHeader}>
+            <Text style={styles.telTitle}>TELEMETRÍA RF-G04</Text>
+            <View style={styles.telDot} />
+          </View>
+          <View style={styles.telRow}>
+            <Text style={styles.telLabel}>Velocidad</Text>
+            <Text style={styles.telVal}>72 <Text style={styles.telUnit}>km/h</Text></Text>
+          </View>
+          <View style={styles.telRow}>
+            <Text style={styles.telLabel}>Altitud</Text>
+            <Text style={styles.telVal}>2,850 <Text style={styles.telUnit}>msnm</Text></Text>
+          </View>
+        </View>
+        {/* GPS badge */}
+        <View style={styles.gpsBadge}>
+          <Ionicons name="radio-outline" size={14} color={Colors.white} />
+          <Text style={styles.gpsText}>PRECISIÓN CINÉTICA · GPS: 0.8m (Active)</Text>
+        </View>
+      </View>
 
       {/* Bottom Sheet */}
       <View style={styles.bottomSheet}>
@@ -133,36 +158,13 @@ const styles = StyleSheet.create({
   },
   headerTitle: { color: Colors.white, fontSize: 18, fontWeight: '900', letterSpacing: 1 },
   // Map
-  mapContainer: { flex: 1, position: 'relative', overflow: 'hidden', backgroundColor: '#B8CBD9' },
-  mapBg: { ...StyleSheet.absoluteFillObject },
-  gridLineH: { position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: 'rgba(255,255,255,0.25)' },
-  gridLineV: { position: 'absolute', top: 0, bottom: 0, width: 1, backgroundColor: 'rgba(255,255,255,0.25)' },
-  road1: {
-    position: 'absolute', width: 3, height: 500, backgroundColor: 'rgba(255,255,255,0.6)',
-    top: 0, left: '40%', transform: [{ rotate: '20deg' }],
+  mapContainer: { flex: 1, position: 'relative', overflow: 'hidden', backgroundColor: Colors.background },
+  busMarkerLive: {
+    width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.primary,
+    alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: Colors.white,
+    ...Shadow.sm,
   },
-  road2: {
-    position: 'absolute', width: 3, height: 500, backgroundColor: 'rgba(255,255,255,0.5)',
-    top: 100, left: '20%', transform: [{ rotate: '-15deg' }],
-  },
-  busMarker: { position: 'absolute', bottom: 160, left: '45%' },
-  busLabel: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: Colors.primary, paddingHorizontal: 10, paddingVertical: 4,
-    borderRadius: Radius.full, marginBottom: 4,
-  },
-  activeDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.success },
-  busLabelText: { color: Colors.white, fontSize: 11, fontWeight: '700' },
-  busIcon: {
-    width: 44, height: 44, borderRadius: Radius.md, backgroundColor: Colors.primary,
-    alignItems: 'center', justifyContent: 'center', position: 'relative',
-  },
-  dirDot: {
-    position: 'absolute', bottom: -4, right: -4,
-    width: 14, height: 14, borderRadius: 7,
-    backgroundColor: Colors.accent, borderWidth: 2, borderColor: Colors.white,
-  },
-  zoomControls: { position: 'absolute', right: Spacing.md, bottom: 200 },
+  zoomControls: { position: 'absolute', right: Spacing.md, bottom: Spacing.xl },
   zoomBtn: {
     width: 44, height: 44, borderRadius: Radius.md, backgroundColor: Colors.white,
     alignItems: 'center', justifyContent: 'center', marginBottom: 4, ...Shadow.sm,
@@ -186,6 +188,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 8,
   },
   gpsText: { fontSize: 10, color: Colors.white, fontWeight: '600', letterSpacing: 0.5 },
+
   // Bottom sheet
   bottomSheet: {
     backgroundColor: Colors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24,

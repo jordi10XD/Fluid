@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, Alert,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, Alert, Modal, TextInput, ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, Shadow } from '../../theme/colors';
@@ -17,6 +17,12 @@ const MENU_ITEMS = [
 export default function PerfilUsuarioScreen({ navigation }: any) {
   const { role, setRole, setUserName, setSupabaseUserId } = useRole();
   const [profileData, setProfileData] = useState<any>(null);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editForm, setEditForm] = useState({
+    nombres: '',
+    telefono: '',
+  });
 
   useEffect(() => {
     loadProfile();
@@ -56,6 +62,49 @@ export default function PerfilUsuarioScreen({ navigation }: any) {
     setUserName('Usuario');
     setSupabaseUserId(null);
     navigation.replace('Login');
+  };
+
+  const openMisDatos = () => {
+    setEditForm({
+      nombres: profileData?.realName || '',
+      telefono: profileData?.telefono || '',
+    });
+    setModalVisible(true);
+  };
+
+  const handleSaveMisDatos = async () => {
+    setSaving(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      
+      if (profileData?.role === 'operator') {
+        await supabase.from('driver_profiles').update({
+          nombre: editForm.nombres,
+          telefono: editForm.telefono,
+        }).eq('id', user.id);
+      }
+      
+      await supabase.from('users').update({
+        nombres: editForm.nombres,
+        telefono: editForm.telefono,
+      }).eq('id', user.id);
+      
+      setModalVisible(false);
+      await loadProfile();
+      Alert.alert('Éxito', 'Tus datos han sido actualizados.');
+    } catch (err) {
+      Alert.alert('Error', 'No se pudieron actualizar los datos');
+    }
+    setSaving(false);
+  };
+
+  const handleMenuPress = (item: any) => {
+    if (item.title === 'Mis Datos') {
+      openMisDatos();
+    } else {
+      Alert.alert("En desarrollo", "Esta sección estará disponible pronto.");
+    }
   };
 
   const displayName = profileData?.realName || 'Cargando...';
@@ -98,19 +147,12 @@ export default function PerfilUsuarioScreen({ navigation }: any) {
         </View>
       </View>
 
-      {/* Network Status */}
-      <View style={styles.networkCard}>
-        <Text style={styles.networkLabel}>ESTADO DE RED</Text>
-        <Text style={styles.networkTitle}>Enlace Satelital Activo</Text>
-        <Text style={styles.networkStat}>98%</Text>
-        <Text style={styles.networkDesc}>Estabilidad de Señal</Text>
-        <Ionicons name="bus" size={80} color="rgba(255,255,255,0.08)" style={styles.busWatermark} />
-      </View>
+
 
       {/* Menu */}
       <View style={styles.menuSection}>
         {MENU_ITEMS.map((item, i) => (
-          <TouchableOpacity key={i} style={styles.menuItem}>
+          <TouchableOpacity key={i} style={styles.menuItem} onPress={() => handleMenuPress(item)}>
             <View style={styles.menuIconBox}>
               <Ionicons name={item.icon as any} size={22} color={Colors.textPrimary} />
             </View>
@@ -130,6 +172,43 @@ export default function PerfilUsuarioScreen({ navigation }: any) {
       </TouchableOpacity>
       <Text style={styles.version}>VERSIÓN DEL SISTEMA 4.2.0-ALPHA</Text>
       <View style={{ height: 80 }} />
+
+      {/* Mis Datos Modal */}
+      <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setModalVisible(false)}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Editar Mis Datos</Text>
+            <TouchableOpacity onPress={() => setModalVisible(false)}>
+              <Ionicons name="close" size={24} color={Colors.textPrimary} />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.modalBody}>
+            <Text style={styles.inputLabel}>Nombre Completo</Text>
+            <TextInput 
+              style={styles.textInput} 
+              value={editForm.nombres} 
+              onChangeText={t => setEditForm({...editForm, nombres: t})}
+              placeholder="Ej: Juan Pérez"
+              placeholderTextColor={Colors.textMuted}
+            />
+            
+            <Text style={styles.inputLabel}>Número de Teléfono</Text>
+            <TextInput 
+              style={styles.textInput} 
+              value={editForm.telefono} 
+              onChangeText={t => setEditForm({...editForm, telefono: t})}
+              placeholder="Ej: 0987654321"
+              placeholderTextColor={Colors.textMuted}
+              keyboardType="phone-pad"
+            />
+            
+            <TouchableOpacity style={styles.saveBtn} onPress={handleSaveMisDatos} disabled={saving}>
+              {saving ? <ActivityIndicator color={Colors.white} /> : <Text style={styles.saveBtnText}>Guardar Cambios</Text>}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
     </ScrollView>
   );
 }
@@ -161,15 +240,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 6,
   },
   secureBadgeText: { fontSize: 12, fontWeight: '700', color: Colors.primary, letterSpacing: 0.5 },
-  networkCard: {
-    backgroundColor: Colors.primary, marginHorizontal: Spacing.lg, borderRadius: Radius.xl,
-    padding: Spacing.lg, marginBottom: Spacing.lg, overflow: 'hidden', position: 'relative',
-  },
-  networkLabel: { fontSize: 10, color: Colors.accentLight, fontWeight: '700', letterSpacing: 1, marginBottom: 4 },
-  networkTitle: { fontSize: 18, fontWeight: '700', color: Colors.white, marginBottom: Spacing.sm },
-  networkStat: { fontSize: 40, fontWeight: '900', color: Colors.white },
-  networkDesc: { fontSize: 13, color: 'rgba(255,255,255,0.7)' },
-  busWatermark: { position: 'absolute', right: -10, bottom: -10 },
   menuSection: {
     marginHorizontal: Spacing.lg, backgroundColor: Colors.white, borderRadius: Radius.xl,
     overflow: 'hidden', ...Shadow.sm, marginBottom: Spacing.lg,
@@ -193,4 +263,22 @@ const styles = StyleSheet.create({
   logoutBadge: { backgroundColor: Colors.danger + '20', borderRadius: Radius.sm, paddingHorizontal: 8, paddingVertical: 3 },
   logoutBadgeText: { fontSize: 11, color: Colors.danger, fontWeight: '700' },
   version: { textAlign: 'center', fontSize: 11, color: Colors.textMuted, letterSpacing: 1 },
+  // Modal Styles
+  modalContainer: { flex: 1, backgroundColor: Colors.background },
+  modalHeader: { 
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', 
+    padding: Spacing.lg, backgroundColor: Colors.white, borderBottomWidth: 1, borderBottomColor: Colors.borderLight 
+  },
+  modalTitle: { fontSize: 18, fontWeight: '800', color: Colors.textPrimary },
+  modalBody: { padding: Spacing.lg },
+  inputLabel: { fontSize: 13, fontWeight: '700', color: Colors.textSecondary, marginBottom: 8 },
+  textInput: { 
+    backgroundColor: Colors.white, borderWidth: 1, borderColor: Colors.border, 
+    borderRadius: Radius.md, padding: 14, fontSize: 15, color: Colors.textPrimary, marginBottom: Spacing.lg 
+  },
+  saveBtn: { 
+    backgroundColor: Colors.primary, padding: 16, borderRadius: Radius.md, 
+    alignItems: 'center', marginTop: Spacing.sm 
+  },
+  saveBtnText: { color: Colors.white, fontSize: 16, fontWeight: '700' },
 });
