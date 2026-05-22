@@ -226,6 +226,43 @@ export default function LoginScreen({ navigation }: any) {
           </TouchableOpacity>
         </View>
 
+        {/* DEV FAST LOGIN */}
+        <View style={{ marginTop: 20, marginBottom: 20 }}>
+          <Text style={{ textAlign: 'center', fontSize: 12, color: Colors.textMuted, marginBottom: 10 }}>DEV FAST LOGIN</Text>
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <TouchableOpacity 
+              style={{ flex: 1, backgroundColor: '#333', padding: 10, borderRadius: 8, alignItems: 'center' }}
+              onPress={() => {
+                setEmail('admin@fluid.com');
+                setPassword('123456');
+                setTimeout(() => handleLogin(), 100); // Give state time to update
+              }}
+            >
+              <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>Admin</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={{ flex: 1, backgroundColor: '#333', padding: 10, borderRadius: 8, alignItems: 'center' }}
+              onPress={() => {
+                setEmail('conductor@fluid.com');
+                setPassword('123456');
+                setTimeout(() => handleLogin(), 100);
+              }}
+            >
+              <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>Cond.</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={{ flex: 1, backgroundColor: '#333', padding: 10, borderRadius: 8, alignItems: 'center' }}
+              onPress={() => {
+                setEmail('pasajero@fluid.com');
+                setPassword('123456');
+                setTimeout(() => handleLogin(), 100);
+              }}
+            >
+              <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>Pasaj.</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         <View style={styles.footer}>
           <Text style={styles.footerText}>¿Nuevo en el sistema? </Text>
           <TouchableOpacity onPress={() => navigation.navigate('Register')}>

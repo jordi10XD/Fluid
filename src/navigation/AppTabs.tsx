@@ -26,12 +26,11 @@ import { useRole } from '../context/RoleContext';
 const Tab = createBottomTabNavigator();
 const ConductorStack = createStackNavigator();
 
-function ConductorStackNav() {
+export function ConductorStackNav() {
   return (
     <ConductorStack.Navigator screenOptions={{ headerShown: false }}>
       <ConductorStack.Screen name="DashboardConductor" component={DashboardConductorScreen} />
-      <ConductorStack.Screen name="MapaNavegacion" component={MapaNavegacionScreen} />
-      <ConductorStack.Screen name="ReporteIncidencias" component={ReporteIncidenciasScreen} />
+      <ConductorStack.Screen name="Perfil" component={PerfilUsuarioScreen} />
     </ConductorStack.Navigator>
   );
 }
@@ -77,35 +76,7 @@ export function PasajeroTabs({ navigation }: any) {
   );
 }
 
-export function ConductorTabs({ navigation }: any) {
-  return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        headerShown: false,
-        tabBarStyle: TAB_BAR_STYLE,
-        tabBarLabelStyle: TAB_LABEL_STYLE,
-        tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: Colors.textMuted,
-        tabBarIcon: ({ color, focused }) => {
-          const icons: Record<string, any> = {
-            Ruta: focused ? 'navigate' : 'navigate-outline',
-            Mapa: focused ? 'map' : 'map-outline',
-            Reportes: focused ? 'document-text' : 'document-text-outline',
-            Perfil: focused ? 'person' : 'person-outline',
-          };
-          return <Ionicons name={icons[route.name]} size={24} color={color} />;
-        },
-      })}
-    >
-      <Tab.Screen name="Ruta" component={ConductorStackNav} />
-      <Tab.Screen name="Mapa" component={MapaNavegacionScreen} />
-      <Tab.Screen name="Reportes" component={ReporteIncidenciasScreen} />
-      <Tab.Screen name="Perfil">
-        {() => <PerfilUsuarioScreen navigation={navigation} />}
-      </Tab.Screen>
-    </Tab.Navigator>
-  );
-}
+// ConductorTabs removed as per new design
 
 export function AdminTabs({ navigation }: any) {
   return (

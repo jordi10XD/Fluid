@@ -52,7 +52,7 @@ import {
 // 1. TYPES
 // ══════════════════════════════════════════════════════════════════════════════
 
-export type ViajeEstado = 'Programado' | 'Operativo' | 'Retrasado' | 'Cancelado';
+export type ViajeEstado = 'Programado' | 'En Espera' | 'En Ruta' | 'Completado' | 'Cancelado' | 'Retrasado';
 
 interface Viaje {
   id:                string;
@@ -113,9 +113,11 @@ const ESTADO_CONFIG: Record<ViajeEstado, {
   color: string; bg: string; icon: string;
 }> = {
   Programado: { color: Colors.primary,  bg: Colors.primary + '18', icon: 'time-outline'             },
-  Operativo:  { color: Colors.success,  bg: Colors.success + '18', icon: 'checkmark-circle-outline' },
-  Retrasado:  { color: '#F59E0B',        bg: '#F59E0B18',           icon: 'warning-outline'          },
-  Cancelado:  { color: Colors.danger,   bg: Colors.danger  + '18', icon: 'close-circle-outline'     },
+  'En Espera': { color: Colors.accent,  bg: Colors.accent + '18', icon: 'checkmark-circle-outline' },
+  'En Ruta':    { color: Colors.success, bg: Colors.success + '18', icon: 'bus-outline'              },
+  Completado:   { color: '#6B7280',      bg: '#6B728018',            icon: 'flag-outline'            },
+  Retrasado:    { color: '#F59E0B',      bg: '#F59E0B18',            icon: 'warning-outline'         },
+  Cancelado:    { color: Colors.danger,  bg: Colors.danger  + '18', icon: 'close-circle-outline'     },
 };
 
 const ESTADOS = Object.keys(ESTADO_CONFIG) as ViajeEstado[];
@@ -143,7 +145,7 @@ type SectionKey = 'ruta' | 'unidad' | 'conductor' | 'horario';
 
 // ── useViajes ─────────────────────────────────────────────────────────────────
 // Maneja el CRUD de la tabla `trips`.
-// Incluye un timer que transiciona automáticamente Programado → Operativo
+// Incluye un timer que transiciona automáticamente Programado → En Espera
 // cuando llega la hora de salida del día de hoy.
 function useViajes() {
   const [items,   setItems]   = useState<Viaje[]>([]);
@@ -172,7 +174,7 @@ function useViajes() {
       const hhmm  = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
       const today = todayStr();
 
-      // Filtra los que deben pasar a Operativo
+      // Filtra los que deben pasar a En Espera
       const due = itemsRef.current.filter(v =>
         v.estado === 'Programado' &&
         v.fecha  === today        &&
@@ -184,12 +186,12 @@ function useViajes() {
       // Actualiza en Supabase (background) y en estado local
       await Promise.all(due.map(v => {
         const { id, ...draft } = v;
-        return updateItem('trips', id, { ...draft, estado: 'Operativo' });
+        return updateItem('trips', id, { ...draft, estado: 'En Espera' });
       }));
 
       const dueIds = new Set(due.map(v => v.id));
       setItems(prev =>
-        prev.map(v => dueIds.has(v.id) ? { ...v, estado: 'Operativo' as ViajeEstado } : v),
+        prev.map(v => dueIds.has(v.id) ? { ...v, estado: 'En Espera' as ViajeEstado } : v),
       );
     };
 
