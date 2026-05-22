@@ -30,6 +30,7 @@ export function ConductorStackNav() {
   return (
     <ConductorStack.Navigator screenOptions={{ headerShown: false }}>
       <ConductorStack.Screen name="DashboardConductor" component={DashboardConductorScreen} />
+      <ConductorStack.Screen name="MapaNavegacion" component={MapaNavegacionScreen} />
       <ConductorStack.Screen name="Perfil" component={PerfilUsuarioScreen} />
     </ConductorStack.Navigator>
   );

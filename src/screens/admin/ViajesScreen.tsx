@@ -259,12 +259,12 @@ function useCatalogos() {
 
 // ── EstadoBadge ───────────────────────────────────────────────────────────────
 function EstadoBadge({ estado }: { estado: ViajeEstado }) {
-  const cfg = ESTADO_CONFIG[estado];
+  const cfg = ESTADO_CONFIG[estado] || { bg: '#E5E7EB', color: '#374151', icon: 'help-circle-outline' };
   return (
     <View style={[badge.container, { backgroundColor: cfg.bg }]}>
       <Ionicons name={cfg.icon as any} size={12} color={cfg.color} />
       <Text style={[badge.text, { color: cfg.color }]}>
-        {estado.toUpperCase()}
+        {estado ? estado.toUpperCase() : 'DESCONOCIDO'}
       </Text>
     </View>
   );

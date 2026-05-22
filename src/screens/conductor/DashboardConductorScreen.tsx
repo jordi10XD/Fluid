@@ -6,7 +6,6 @@ import { Ionicons } from '@expo/vector-icons';
 import MapView, { PROVIDER_GOOGLE } from 'react-native-maps';
 import MapViewDirections from 'react-native-maps-directions';
 import * as Location from 'expo-location';
-import * as Linking from 'expo-linking';
 import { supabase } from '../../lib/supabase';
 import { Colors, Spacing, Radius, Shadow } from '../../theme/colors';
 import { useRole } from '../../context/RoleContext';
@@ -163,8 +162,7 @@ export default function DashboardConductorScreen({ navigation }: any) {
       
       if (!error) {
         setActiveTrip({ ...activeTrip, estado: 'En Ruta' });
-        // Activar modo conduccion de Google Maps
-        Linking.openURL(`google.navigation:q=${DESTINATION.latitude},${DESTINATION.longitude}`);
+        navigation.navigate('MapaNavegacion');
       }
     } catch (e) {
       console.log('Error al iniciar viaje', e);
@@ -301,6 +299,23 @@ export default function DashboardConductorScreen({ navigation }: any) {
               <Ionicons name="play" size={24} color={Colors.white} />
               <Text style={styles.incidentBtnText}>INICIAR VIAJE</Text>
             </TouchableOpacity>
+          ) : activeTrip && activeTrip.estado === 'En Ruta' ? (
+            <View style={{ flexDirection: 'row', gap: 10, marginBottom: Spacing.lg }}>
+              <TouchableOpacity 
+                style={[styles.incidentBtn, { flex: 1, marginBottom: 0, backgroundColor: Colors.primary }]}
+                onPress={() => navigation.navigate('MapaNavegacion')}
+              >
+                <Ionicons name="map" size={20} color={Colors.white} />
+                <Text style={[styles.incidentBtnText, { fontSize: 13 }]}>VER MAPA</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.incidentBtn, { flex: 1, marginBottom: 0 }]}
+                onPress={() => setShowIncidentModal(true)}
+              >
+                <Ionicons name="warning" size={20} color={Colors.white} />
+                <Text style={[styles.incidentBtnText, { fontSize: 13 }]}>REPORTE</Text>
+              </TouchableOpacity>
+            </View>
           ) : (
             <TouchableOpacity 
               style={styles.incidentBtn}
