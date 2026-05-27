@@ -16,7 +16,7 @@ import MapaNavegacionScreen from '../screens/conductor/MapaNavegacionScreen';
 import ReporteIncidenciasScreen from '../screens/conductor/ReporteIncidenciasScreen';
 
 // Admin screens
-import PanelGlobalMonitoreoScreen from '../screens/admin/PanelGlobalMonitoreoScreen';
+import MonitoreoNavigator from '../screens/admin/monitoreo/MonitoreoNavigator';
 import ControlScreen from '../screens/admin/control';
 import EmisorNotificacionesScreen from '../screens/admin/EmisorNotificacionesScreen';
 import ViajesScreen from '../screens/admin/ViajesScreen';
@@ -100,7 +100,7 @@ export function AdminTabs({ navigation }: any) {
         },
       })}
     >
-      <Tab.Screen name="Monitor" component={PanelGlobalMonitoreoScreen} />
+      <Tab.Screen name="Monitor" component={MonitoreoNavigator} />
       <Tab.Screen name="Control" component={ControlScreen} />
       <Tab.Screen name="Viajes" component={ViajesScreen} />
       <Tab.Screen name="Notif" component={EmisorNotificacionesScreen} />
