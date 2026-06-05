@@ -7,6 +7,7 @@ import { Colors } from '../theme/colors';
 // Pasajero screens
 import MapaSeguimientoScreen from '../screens/pasajero/MapaSeguimientoScreen';
 import RouteSearchScreen from '../screens/pasajero/RouteSearchScreen';
+import ResultadosHorariosScreen from '../screens/pasajero/ResultadosHorariosScreen';
 import CentroNotificacionesScreen from '../screens/pasajero/CentroNotificacionesScreen';
 import PerfilUsuarioScreen from '../screens/pasajero/PerfilUsuarioScreen';
 
@@ -25,6 +26,16 @@ import { useRole } from '../context/RoleContext';
 
 const Tab = createBottomTabNavigator();
 const ConductorStack = createStackNavigator();
+const BuscarStack = createStackNavigator();
+
+export function BuscarStackNav() {
+  return (
+    <BuscarStack.Navigator screenOptions={{ headerShown: false }}>
+      <BuscarStack.Screen name="RouteSearch" component={RouteSearchScreen} />
+      <BuscarStack.Screen name="ResultadosHorarios" component={ResultadosHorariosScreen} />
+    </BuscarStack.Navigator>
+  );
+}
 
 export function ConductorStackNav() {
   return (
@@ -68,7 +79,7 @@ export function PasajeroTabs({ navigation }: any) {
       })}
     >
       <Tab.Screen name="Mapa" component={MapaSeguimientoScreen} />
-      <Tab.Screen name="Buscar" component={RouteSearchScreen} />
+      <Tab.Screen name="Buscar" component={BuscarStackNav} />
       <Tab.Screen name="Alertas" component={CentroNotificacionesScreen} />
       <Tab.Screen name="Perfil">
         {() => <PerfilUsuarioScreen navigation={navigation} />}

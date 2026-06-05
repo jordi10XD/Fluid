@@ -1,32 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, TextInput,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, TextInput, ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, Shadow } from '../../theme/colors';
-
-const NOTIFICATIONS = [
-  {
-    id: '1', type: 'danger', icon: 'time-outline', title: 'Bus 402 retrasado 10 min por tráfico',
-    detail: 'Incidencia detectada en sector Pifo. Se estima regularización de frecuencia al llegar a Terminal Quitumbe.',
-    meta: 'RUTA E-35 · 12 KM/H', time: 'HACE 5 MIN', hasMap: false,
-  },
-  {
-    id: '2', type: 'warning', icon: 'git-merge-outline', title: 'Cambio de ruta detectado en Hwy 35',
-    detail: 'La unidad ha tomado un desvío no programado. Protocolo RF-G04 activado para seguimiento cinético auxiliar.',
-    meta: '', time: 'HACE 24 MIN', hasMap: true,
-  },
-  {
-    id: '3', type: 'success', icon: 'checkmark-circle', title: 'Viaje a Cuenca confirmado',
-    detail: 'Unidad 105 asignada. Salida programada para las 22:00 desde Terminal Terrestre Guayaquil.',
-    meta: 'ASIENTO 12-B (Ventana) · ANDÉN A-04', time: '10:30 AM', hasMap: false,
-  },
-  {
-    id: '4', type: 'muted', icon: 'build-outline', title: 'Mantenimiento Preventivo Unidad 208',
-    detail: 'Revisión de neumáticos y sistema de frenado completada bajo estándares de seguridad Andina.',
-    meta: '', time: 'AYER', hasMap: false,
-  },
-];
+import { supabase } from '../../lib/supabase';
 
 const TYPE_COLORS: Record<string, string> = {
   danger: Colors.danger,
@@ -37,6 +15,81 @@ const TYPE_COLORS: Record<string, string> = {
 
 export default function CentroNotificacionesScreen() {
   const [filtro, setFiltro] = useState('Todas');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [alertas, setAlertas] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchAlertas = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('incidencias')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setAlertas(data || []);
+    } catch (e) {
+      console.log('Error fetching alerts:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAlertas();
+
+    // Subscribe to new incidents in real-time
+    const subscription = supabase.channel(`incidencias_passenger_${Date.now()}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'incidencias' }, () => {
+        fetchAlertas();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(subscription);
+    };
+  }, []);
+
+  const getAlertMetadata = (item: any) => {
+    let type = 'muted';
+    let icon = 'information-circle-outline';
+    if (item.severidad === 'Crítico') {
+      type = 'danger';
+      icon = 'alert-circle';
+    } else if (item.severidad === 'Moderado') {
+      type = 'warning';
+      icon = 'warning-outline';
+    } else if (item.severidad === 'Leve') {
+      type = 'success';
+      icon = 'checkmark-circle-outline';
+    }
+
+    const date = new Date(item.created_at);
+    const timeFormatted = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' · ' + date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+
+    return {
+      type,
+      icon,
+      title: `${item.tipo} · Unidad ${item.unidad_placa || 'S/N'}`,
+      detail: item.descripcion || 'Sin descripción detallada.',
+      meta: `RUTA: ${item.ruta_nombre || 'No especificada'} · ESTADO: ${item.estado || 'PENDIENTE'}`,
+      time: timeFormatted.toUpperCase(),
+      hasMap: !!(item.lat && item.lng),
+    };
+  };
+
+  const filteredAlertas = alertas.filter((a) => {
+    const matchesSearch = searchQuery
+      ? (a.unidad_placa?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+         a.tipo?.toLowerCase().includes(searchQuery.toLowerCase()))
+      : true;
+    if (!matchesSearch) return false;
+
+    if (filtro === 'Todas') return true;
+    if (filtro === 'Retrasos') return a.tipo?.toLowerCase().includes('retraso');
+    if (filtro === 'Seguridad') return !a.tipo?.toLowerCase().includes('retraso');
+    return true;
+  });
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -66,10 +119,12 @@ export default function CentroNotificacionesScreen() {
 
       {/* Alert count */}
       <View style={styles.alertCountCard}>
-        <Text style={styles.alertCountLabel}>ALERTAS HOY</Text>
-        <Text style={styles.alertCountNum}>12 <Text style={styles.alertCountSub}>Incidentes reportados</Text></Text>
+        <Text style={styles.alertCountLabel}>ALERTAS REGISTRADAS</Text>
+        <Text style={styles.alertCountNum}>
+          {alertas.length} <Text style={styles.alertCountSub}>Incidentes reportados</Text>
+        </Text>
         <View style={styles.alertProgress}>
-          <View style={styles.alertProgressFill} />
+          <View style={[styles.alertProgressFill, { width: alertas.length > 0 ? '100%' : '0%' }]} />
         </View>
       </View>
 
@@ -87,39 +142,45 @@ export default function CentroNotificacionesScreen() {
       </View>
       <View style={styles.searchRow}>
         <Ionicons name="search-outline" size={16} color={Colors.textMuted} />
-        <TextInput style={styles.searchInput} placeholder="Buscar ID de unidad..." placeholderTextColor={Colors.textMuted} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Buscar por placa o tipo..."
+          placeholderTextColor={Colors.textMuted}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
       </View>
 
       {/* Notifications */}
       <View style={styles.notifList}>
-        {NOTIFICATIONS.map((n) => (
-          <View key={n.id} style={[styles.notifCard, { borderLeftColor: TYPE_COLORS[n.type] }]}>
-            <View style={styles.notifHeader}>
-              <View style={[styles.notifIconBox, { backgroundColor: TYPE_COLORS[n.type] + '20' }]}>
-                <Ionicons name={n.icon as any} size={20} color={TYPE_COLORS[n.type]} />
+        {loading ? (
+          <ActivityIndicator size="large" color={Colors.primary} style={{ marginVertical: 32 }} />
+        ) : filteredAlertas.length === 0 ? (
+          <Text style={styles.emptyText}>No hay incidencias registradas.</Text>
+        ) : (
+          filteredAlertas.map((item) => {
+            const n = getAlertMetadata(item);
+            return (
+              <View key={item.id} style={[styles.notifCard, { borderLeftColor: TYPE_COLORS[n.type] }]}>
+                <View style={styles.notifHeader}>
+                  <View style={[styles.notifIconBox, { backgroundColor: TYPE_COLORS[n.type] + '20' }]}>
+                    <Ionicons name={n.icon as any} size={20} color={TYPE_COLORS[n.type]} />
+                  </View>
+                  <View style={{ flex: 1, marginLeft: Spacing.sm }}>
+                    <Text style={styles.notifTitle}>{n.title}</Text>
+                    <Text style={styles.notifTime}>{n.time}</Text>
+                  </View>
+                </View>
+                <Text style={styles.notifDetail}>{n.detail}</Text>
+                {n.meta !== '' && (
+                  <View style={styles.notifMeta}>
+                    <Text style={styles.notifMetaText}>{n.meta}</Text>
+                  </View>
+                )}
               </View>
-              <View style={{ flex: 1, marginLeft: Spacing.sm }}>
-                <Text style={styles.notifTitle}>{n.title}</Text>
-                <Text style={styles.notifTime}>{n.time}</Text>
-              </View>
-              <TouchableOpacity>
-                <Ionicons name="ellipsis-vertical" size={18} color={Colors.textMuted} />
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.notifDetail}>{n.detail}</Text>
-            {n.meta !== '' && (
-              <View style={styles.notifMeta}>
-                <Text style={styles.notifMetaText}>{n.meta}</Text>
-              </View>
-            )}
-            {n.hasMap && (
-              <TouchableOpacity style={styles.mapBtn}>
-                <Ionicons name="location" size={14} color={Colors.white} />
-                <Text style={styles.mapBtnText}>VER EN MAPA</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        ))}
+            );
+          })
+        )}
       </View>
 
       {/* Server Status */}
@@ -161,7 +222,7 @@ const styles = StyleSheet.create({
   alertCountNum: { fontSize: 24, fontWeight: '800', color: Colors.white, marginBottom: 8 },
   alertCountSub: { fontSize: 14, fontWeight: '400' },
   alertProgress: { height: 4, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 2 },
-  alertProgressFill: { width: '70%', height: '100%', backgroundColor: Colors.accent, borderRadius: 2 },
+  alertProgressFill: { height: '100%', backgroundColor: Colors.accent, borderRadius: 2 },
   filtersRow: { flexDirection: 'row', paddingHorizontal: Spacing.lg, gap: 8, marginBottom: Spacing.sm },
   filterChip: {
     paddingHorizontal: 16, paddingVertical: 8, borderRadius: Radius.md,
@@ -188,11 +249,7 @@ const styles = StyleSheet.create({
   notifDetail: { fontSize: 13, color: Colors.textSecondary, lineHeight: 18, marginBottom: 8 },
   notifMeta: { backgroundColor: Colors.background, borderRadius: Radius.sm, padding: 8 },
   notifMetaText: { fontSize: 12, fontWeight: '600', color: Colors.textSecondary },
-  mapBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    backgroundColor: Colors.primary, borderRadius: Radius.md, padding: 10, marginTop: 8,
-  },
-  mapBtnText: { color: Colors.white, fontSize: 12, fontWeight: '700', letterSpacing: 1 },
+  emptyText: { textAlign: 'center', marginVertical: 32, fontSize: 14, color: Colors.textMuted },
   serverStatus: {
     marginHorizontal: Spacing.lg, borderRadius: Radius.lg, backgroundColor: Colors.white,
     padding: Spacing.md, ...Shadow.sm, marginBottom: Spacing.md,

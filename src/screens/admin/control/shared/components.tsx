@@ -204,7 +204,7 @@ const ic = StyleSheet.create({
 // ══════════════════════════════════════════════════════════════════════════════
 
 interface EmptyStateProps {
-  icon?:    keyof typeof Ionicons.glyphMap;
+  icon?:    any;
   message?: string;
 }
 

@@ -11,45 +11,6 @@ export default function RouteSearchScreen({ navigation }: any) {
   const [origen, setOrigen] = useState('');
   const [destino, setDestino] = useState('');
   const [fecha] = useState(new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' }));
-  const [filtro, setFiltro] = useState('Siguientes Salidas');
-  const [trips, setTrips] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    handleSearch();
-  }, []);
-
-  const handleSearch = async () => {
-    setLoading(true);
-    let routeQuery = supabase.from('routes').select('id');
-    
-    if (origen.trim()) routeQuery = routeQuery.ilike('origen', `%${origen.trim()}%`);
-    if (destino.trim()) routeQuery = routeQuery.ilike('destino', `%${destino.trim()}%`);
-    
-    const { data: routeData } = await routeQuery;
-    const routeIds = routeData ? routeData.map(r => r.id) : [];
-
-    if (routeIds.length === 0 && (origen.trim() || destino.trim())) {
-      setTrips([]);
-      setLoading(false);
-      return;
-    }
-
-    let tripQuery = supabase.from('trips')
-      .select(`
-        id, departure_time, estimated_arrival, status,
-        routes ( nombre, origen, destino, tiempo_min ),
-        buses ( internal_number, plate_number )
-      `);
-      
-    if (routeIds.length > 0) {
-      tripQuery = tripQuery.in('route_id', routeIds);
-    }
-    
-    const { data: tripData } = await tripQuery.order('departure_time', { ascending: true });
-    if (tripData) setTrips(tripData);
-    setLoading(false);
-  };
 
   const swap = () => {
     const tmp = origen;
@@ -74,6 +35,7 @@ export default function RouteSearchScreen({ navigation }: any) {
               style={styles.input}
               value={origen}
               onChangeText={setOrigen}
+              placeholder="Ej: Quito"
               placeholderTextColor={Colors.textMuted}
             />
           </View>
@@ -91,6 +53,7 @@ export default function RouteSearchScreen({ navigation }: any) {
               style={styles.input}
               value={destino}
               onChangeText={setDestino}
+              placeholder="Ej: Guayaquil"
               placeholderTextColor={Colors.textMuted}
             />
           </View>
@@ -105,83 +68,27 @@ export default function RouteSearchScreen({ navigation }: any) {
         </View>
         <TouchableOpacity
           style={styles.searchBtn}
-          onPress={handleSearch}
+          onPress={() => {
+            navigation.navigate('ResultadosHorarios', {
+              origen: origen.trim(),
+              destino: destino.trim(),
+              fecha: fecha
+            });
+          }}
         >
           <Ionicons name="search" size={18} color={Colors.white} />
           <Text style={styles.searchBtnText}>Buscar Rutas</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Results */}
-      <View style={styles.section}>
-        <Text style={styles.sectionLabel}>VIAJES ACTIVOS Y PROGRAMADOS</Text>
-        {loading ? (
-          <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 20 }} />
-        ) : trips.length === 0 ? (
-          <View style={{ alignItems: 'center', padding: 20 }}>
-            <Ionicons name="bus-outline" size={40} color={Colors.textMuted} />
-            <Text style={{ marginTop: 10, color: Colors.textSecondary, fontWeight: '600' }}>No se encontraron viajes</Text>
-          </View>
-        ) : (
-          trips.map((s, i) => {
-            const isActivo = s.status === 'en_route';
-            const salida = s.departure_time ? new Date(s.departure_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--';
-            const llegada = s.estimated_arrival ? new Date(s.estimated_arrival).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--';
-            const duracion = s.routes?.tiempo_min ? `${Math.floor(s.routes.tiempo_min / 60)}h ${s.routes.tiempo_min % 60}m` : '--';
-            const empresa = s.routes?.nombre || 'Ruta Desconocida';
-            const bus = s.buses?.internal_number || s.buses?.plate_number || 'N/A';
-
-            return (
-              <View key={s.id} style={styles.scheduleCard}>
-                {/* Status indicator */}
-                <View style={styles.statusRow}>
-                  <View style={[styles.statusDot, { backgroundColor: isActivo ? Colors.success : Colors.textMuted }]} />
-                  <Text style={[styles.statusText, { color: isActivo ? Colors.success : Colors.textMuted }]}>
-                    {isActivo ? 'EN RUTA · EN VIVO' : s.status === 'scheduled' ? 'PROGRAMADO' : s.status.toUpperCase()}
-                  </Text>
-                  <View style={styles.busBadge}>
-                    <Ionicons name="bus-outline" size={11} color={Colors.textSecondary} />
-                    <Text style={styles.busBadgeText}>UNIDAD {bus}</Text>
-                  </View>
-                </View>
-
-                {/* Times */}
-                <View style={styles.timeRow}>
-                  <View>
-                    <Text style={styles.timeMain}>{salida}</Text>
-                    <Text style={styles.timeTag}>SALIDA</Text>
-                  </View>
-                  <View style={styles.durationPill}>
-                    <Ionicons name="time-outline" size={14} color={Colors.textSecondary} />
-                    <Text style={styles.durationText}>{duracion}</Text>
-                  </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={styles.timeMain}>{llegada}</Text>
-                    <Text style={styles.timeTag}>LLEGADA EST.</Text>
-                  </View>
-                </View>
-
-                <Text style={styles.empresaName}>{empresa}</Text>
-
-                {/* Subscribe action */}
-                <TouchableOpacity
-                  style={[styles.subscribeBtn, !isActivo && styles.subscribeBtnDisabled]}
-                  disabled={!isActivo}
-                >
-                  <Ionicons
-                    name={isActivo ? 'location' : 'lock-closed-outline'}
-                    size={16}
-                    color={isActivo ? Colors.white : Colors.textMuted}
-                  />
-                  <Text style={[styles.subscribeBtnText, !isActivo && styles.subscribeBtnTextDisabled]}>
-                    {isActivo ? 'Seguir Viaje en Tiempo Real' : 'Viaje no iniciado'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            );
-          })
-        )}
+      {/* Info banner */}
+      <View style={styles.infoBanner}>
+        <Ionicons name="information-circle-outline" size={18} color={Colors.primary} />
+        <Text style={styles.infoText}>
+          Ingrese el origen y destino para consultar los horarios disponibles, el estado de las unidades en ruta y la telemetría cinética en tiempo real.
+        </Text>
       </View>
+
       <View style={{ height: 80 }} />
     </ScrollView>
   );

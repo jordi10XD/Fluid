@@ -1,16 +1,77 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, SafeAreaView, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { Colors, Spacing, Radius, Shadow } from '../../../theme/colors';
-
-const MOCK_ALERTS = [
-  { id: '1', time: '08:15', route: 'Quito — Guayaquil', road: 'TRONCAL PRINCIPAL E35', busId: 'BUS 402', driver: 'Carlos Rivadeneira', type: 'Desvío de Ruta', severity: 'CRÍTICA' },
-];
+import { supabase } from '../../../lib/supabase';
 
 export default function AlertasCriticasScreen() {
   const navigation = useNavigation();
   const [searchQuery, setSearchQuery] = useState('');
+  const [alertas, setAlertas] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchAlertas();
+    
+    const subscription = supabase.channel(`incidencias_changes_${Date.now()}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'incidencias' }, payload => {
+        setAlertas(prev => [payload.new, ...prev]);
+      })
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const fetchAlertas = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('incidencias')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setAlertas(data || []);
+    } catch (e) {
+      console.log('Error fetching alertas:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredAlertas = alertas.filter(a => 
+    a.unidad_placa?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    a.ruta_nombre?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const getSeverityColor = (sev: string) => {
+    if (sev === 'Leve') return Colors.success;
+    if (sev === 'Moderado') return Colors.warning;
+    if (sev === 'Crítico') return Colors.danger;
+    return Colors.textMuted;
+  };
+
+  const getSeverityBgColor = (sev: string) => {
+    if (sev === 'Leve') return '#F0FDF4'; // Solid light green
+    if (sev === 'Moderado') return '#FFFBEB'; // Solid light amber
+    if (sev === 'Crítico') return '#FEF2F2'; // Solid light red
+    return Colors.cardBg;
+  };
+
+  const getSeverityBorderColor = (sev: string) => {
+    if (sev === 'Leve') return '#DCFCE7'; // Subtle green border
+    if (sev === 'Moderado') return '#FEF3C7'; // Subtle amber border
+    if (sev === 'Crítico') return '#FEE2E2'; // Subtle red border
+    return Colors.border;
+  };
+
+  const formatTime = (dateStr: string) => {
+    if (!dateStr) return '--:--';
+    const d = new Date(dateStr);
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -38,34 +99,44 @@ export default function AlertasCriticasScreen() {
       </View>
 
       {/* Lista de Alertas */}
-      <FlatList 
-        data={MOCK_ALERTS}
-        keyExtractor={item => item.id}
-        contentContainerStyle={{ paddingHorizontal: Spacing.md, paddingBottom: 20 }}
-        renderItem={({ item }) => (
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.time}>{item.time}</Text>
-              <Ionicons name="swap-horizontal" size={16} color={Colors.textMuted} />
-              <Text style={styles.route}>{item.route}</Text>
-            </View>
-            <Text style={styles.road}>{item.road}</Text>
-            
-            <View style={styles.infoRow}>
-              <Ionicons name="bus-outline" size={14} color={Colors.textSecondary} />
-              <Text style={styles.infoText}>{item.busId}</Text>
-              <Text style={styles.separator}>|</Text>
-              <Ionicons name="person-outline" size={14} color={Colors.textSecondary} />
-              <Text style={styles.infoText}>{item.driver}</Text>
-            </View>
+      {loading ? (
+        <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 40 }} />
+      ) : (
+        <FlatList 
+          data={filteredAlertas}
+          keyExtractor={item => item.id}
+          contentContainerStyle={{ paddingHorizontal: Spacing.md, paddingBottom: 20 }}
+          renderItem={({ item }) => {
+            const sevColor = getSeverityColor(item.severidad);
+            const bgColor = getSeverityBgColor(item.severidad);
+            const borderColor = getSeverityBorderColor(item.severidad);
+            return (
+              <View style={[styles.card, { borderLeftColor: sevColor, backgroundColor: bgColor, borderColor: borderColor }]}>
+                <View style={styles.cardHeader}>
+                  <Text style={styles.time}>{formatTime(item.created_at)}</Text>
+                  <Ionicons name="swap-horizontal" size={16} color={Colors.textMuted} />
+                  <Text style={styles.route}>{item.ruta_nombre}</Text>
+                </View>
+                {item.descripcion ? <Text style={styles.road}>{item.descripcion}</Text> : null}
+                
+                <View style={styles.infoRow}>
+                  <Ionicons name="bus-outline" size={14} color={Colors.textSecondary} />
+                  <Text style={styles.infoText}>{item.unidad_placa}</Text>
+                  <Text style={styles.separator}>|</Text>
+                  <Ionicons name="alert-circle-outline" size={14} color={Colors.textSecondary} />
+                  <Text style={styles.infoText}>Estado: {item.estado}</Text>
+                </View>
 
-            <View style={styles.alertDetails}>
-               <Ionicons name="warning" size={16} color={Colors.danger} />
-               <Text style={styles.alertText}>{item.type}</Text>
-            </View>
-          </View>
-        )}
-      />
+                <View style={[styles.alertDetails, { borderTopColor: sevColor + '30' }]}>
+                   <Ionicons name="warning" size={16} color={sevColor} />
+                   <Text style={[styles.alertText, { color: sevColor }]}>{item.tipo}</Text>
+                </View>
+              </View>
+            );
+          }}
+          ListEmptyComponent={<Text style={{ textAlign: 'center', marginTop: 20, color: Colors.textMuted }}>No hay incidencias reportadas.</Text>}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -85,7 +156,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15, paddingVertical: 12, borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.border,
   },
   searchInput: { flex: 1, fontSize: 14, color: Colors.textPrimary },
-  card: { backgroundColor: '#FFF1F2', borderRadius: Radius.xl, padding: Spacing.lg, marginBottom: Spacing.md, ...Shadow.sm, borderWidth: 1, borderLeftWidth: 4, borderColor: Colors.danger },
+  card: { 
+    borderRadius: Radius.xl, 
+    padding: Spacing.lg, 
+    marginBottom: Spacing.md, 
+    ...Shadow.sm, 
+    borderWidth: 1, 
+    borderLeftWidth: 4 
+  },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
   time: { fontSize: 18, fontWeight: '900', color: Colors.textPrimary },
   route: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
@@ -93,6 +171,13 @@ const styles = StyleSheet.create({
   infoRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
   infoText: { fontSize: 13, color: Colors.textSecondary, fontWeight: '500' },
   separator: { color: Colors.border, marginHorizontal: 4 },
-  alertDetails: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(239, 68, 68, 0.2)' },
+  alertDetails: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 8, 
+    marginTop: 4, 
+    paddingTop: 12, 
+    borderTopWidth: 1 
+  },
   alertText: { fontSize: 13, fontWeight: '700', color: Colors.danger },
 });

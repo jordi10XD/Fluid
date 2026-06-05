@@ -55,10 +55,10 @@ export default function PanelGlobalMonitoreoScreen() {
     .onEnd((event) => {
       // Si el usuario desliza rápido hacia arriba o pasa la mitad, se expande
       if (event.translationY < -50 || event.velocityY < -500) {
-        translateY.value = withSpring(-(MAX_SHEET_HEIGHT - MIN_SHEET_HEIGHT), { damping: 15 });
+        translateY.value = withSpring(-(MAX_SHEET_HEIGHT - MIN_SHEET_HEIGHT), { damping: 25, stiffness: 180, mass: 0.8 });
       } else {
         // De lo contrario, regresa a su estado minimizado
-        translateY.value = withSpring(0, { damping: 15 });
+        translateY.value = withSpring(0, { damping: 25, stiffness: 180, mass: 0.8 });
       }
     });
 
@@ -206,7 +206,7 @@ const styles = StyleSheet.create({
     // Calculamos el bottom dinámicamente según la altura de la pantalla
     bottom: -(MAX_SHEET_HEIGHT - MIN_SHEET_HEIGHT), 
     height: MAX_SHEET_HEIGHT,
-    backgroundColor: Colors.background,
+    backgroundColor: Colors.white,
     borderTopLeftRadius: 32, 
     borderTopRightRadius: 32,
     paddingHorizontal: Spacing.lg,

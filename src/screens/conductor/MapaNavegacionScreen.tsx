@@ -87,6 +87,37 @@ export default function MapaNavegacionScreen({ navigation }: any) {
     })();
   }, []);
 
+  // Publish live bus locations to Supabase trip_locations table when position changes and trip is active
+  useEffect(() => {
+    if (!location || !activeTrip) return;
+
+    const publishLocation = async () => {
+      try {
+        const { error } = await supabase
+          .from('trip_locations')
+          .upsert({
+            trip_id: activeTrip.id,
+            current_location: {
+              type: 'Point',
+              coordinates: [location.coords.longitude, location.coords.latitude] // [lon, lat] as required by PostGIS GeoJSON
+            },
+            speed_kmh: location.coords.speed && location.coords.speed > 0 
+              ? Math.round(location.coords.speed * 3.6) 
+              : 0,
+            recorded_at: new Date().toISOString()
+          }, { onConflict: 'trip_id' });
+
+        if (error) {
+          console.log('Error publishing trip location:', error);
+        }
+      } catch (err) {
+        console.log('Exception publishing trip location:', err);
+      }
+    };
+
+    publishLocation();
+  }, [location, activeTrip]);
+
   // Update Turn-by-Turn logic and Traffic detection
   useEffect(() => {
     if (location && steps.length > 0 && currentStepIndex < steps.length) {
@@ -294,6 +325,21 @@ export default function MapaNavegacionScreen({ navigation }: any) {
             </Marker>
           )}
         </MapView>
+
+        {/* Botón de centrado */}
+        <TouchableOpacity 
+          style={styles.centerBtn} 
+          onPress={() => {
+            if (location && mapRef.current) {
+              mapRef.current.animateCamera({
+                center: { latitude: location.coords.latitude, longitude: location.coords.longitude },
+                zoom: 17
+              });
+            }
+          }}
+        >
+          <Ionicons name="locate" size={24} color={Colors.primary} />
+        </TouchableOpacity>
       </View>
 
       {/* Bottom Sheet */}
@@ -411,4 +457,11 @@ const styles = StyleSheet.create({
   incidentBtnText: { fontSize: 15, fontWeight: '800', color: Colors.white, letterSpacing: 1 },
   startPoint: { width: 28, height: 28, borderRadius: 14, backgroundColor: Colors.success, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: Colors.white },
   startPointText: { color: Colors.white, fontSize: 13, fontWeight: '800' },
+  centerBtn: {
+    position: 'absolute', right: Spacing.lg, top: Spacing.lg,
+    width: 48, height: 48, borderRadius: 24,
+    backgroundColor: Colors.white,
+    alignItems: 'center', justifyContent: 'center',
+    ...Shadow.md,
+  },
 });

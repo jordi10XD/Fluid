@@ -5,6 +5,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { Colors, Spacing, Radius, Shadow } from '../../theme/colors';
+import { supabase } from '../../lib/supabase';
 
 interface ReporteIncidenciasProps {
   onClose: () => void;
@@ -15,10 +16,52 @@ interface ReporteIncidenciasProps {
 
 export default function ReporteIncidenciasModal({ onClose, unidad, ruta, location }: ReporteIncidenciasProps) {
   const [tipo, setTipo] = useState('Desvío de Ruta');
+  const [severidad, setSeveridad] = useState('Moderado');
   const [desc, setDesc] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const TIPOS = ['Desvío de Ruta', 'Accidente Vial', 'Falla Mecánica', 'Retraso por Tráfico', 'Otro'];
+
+  const handleSubmit = async () => {
+    if (!desc.trim()) {
+      alert('Por favor ingrese una descripción detallada.');
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      
+      const { error } = await supabase.from('incidencias').insert({
+        unidad_placa: unidad,
+        ruta_nombre: ruta,
+        tipo,
+        severidad,
+        descripcion: desc,
+        lat: location?.coords.latitude || null,
+        lng: location?.coords.longitude || null,
+        conductor_id: userData?.user?.id || null,
+        estado: 'PENDIENTE'
+      });
+
+      if (error) throw error;
+
+      await supabase.functions.invoke('send-notification', {
+        body: {
+          title: `Incidencia: ${tipo}`,
+          message: `Unidad ${unidad} reporta: ${desc} (Severidad: ${severidad})`,
+          audience: 'all'
+        }
+      });
+
+      setSubmitted(true);
+    } catch (e) {
+      console.error('Error al enviar reporte:', e);
+      alert('Hubo un error al guardar la incidencia.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <View style={styles.modalOverlay}>
@@ -58,6 +101,22 @@ export default function ReporteIncidenciasModal({ onClose, unidad, ruta, locatio
             </View>
           </View>
 
+          {/* Tipo de Incidencia */}
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>TIPO DE INCIDENCIA</Text>
+            <View style={styles.chipGrid}>
+              {TIPOS.map((t) => (
+                <TouchableOpacity 
+                  key={t} 
+                  style={[styles.typeChip, tipo === t && styles.typeChipActive]}
+                  onPress={() => setTipo(t)}
+                >
+                  <Text style={[styles.typeChipText, tipo === t && styles.typeChipTextActive]}>{t}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
           {/* Description */}
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>DESCRIPCIÓN DETALLADA</Text>
@@ -82,7 +141,15 @@ export default function ReporteIncidenciasModal({ onClose, unidad, ruta, locatio
                 { label: 'Moderado', color: Colors.warning },
                 { label: 'Crítico', color: Colors.danger },
               ].map((s) => (
-                <TouchableOpacity key={s.label} style={[styles.severityBtn, { borderColor: s.color }]}>
+                <TouchableOpacity 
+                  key={s.label} 
+                  style={[
+                    styles.severityBtn, 
+                    { borderColor: s.color },
+                    severidad === s.label && { backgroundColor: s.color + '20' }
+                  ]}
+                  onPress={() => setSeveridad(s.label)}
+                >
                   <View style={[styles.severityDot, { backgroundColor: s.color }]} />
                   <Text style={[styles.severityText, { color: s.color }]}>{s.label}</Text>
                 </TouchableOpacity>
@@ -97,9 +164,13 @@ export default function ReporteIncidenciasModal({ onClose, unidad, ruta, locatio
               <Text style={styles.successDesc}>El centro de control ha sido notificado.</Text>
             </View>
           ) : (
-            <TouchableOpacity style={styles.submitBtn} onPress={() => setSubmitted(true)}>
+            <TouchableOpacity 
+              style={[styles.submitBtn, isSubmitting && { opacity: 0.7 }]} 
+              onPress={handleSubmit} 
+              disabled={isSubmitting}
+            >
               <Ionicons name="send" size={18} color={Colors.white} />
-              <Text style={styles.submitText}>Enviar Reporte</Text>
+              <Text style={styles.submitText}>{isSubmitting ? 'Enviando...' : 'Enviar Reporte'}</Text>
             </TouchableOpacity>
           )}
           <View style={{ height: 20 }} />
@@ -133,6 +204,20 @@ const styles = StyleSheet.create({
   unitDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.success },
   unitText: { fontSize: 11, color: Colors.white, fontWeight: '600', letterSpacing: 0.5 },
   section: { padding: Spacing.lg },
+  locationCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: Colors.white, borderRadius: Radius.lg, padding: Spacing.md,
+    borderWidth: 1, borderColor: Colors.border, ...Shadow.sm,
+  },
+  locationMain: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary },
+  locationSub: { fontSize: 11, color: Colors.textSecondary, marginTop: 2 },
+  liveIndicator: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: 'rgba(34,197,94,0.12)', borderRadius: Radius.sm,
+    paddingHorizontal: 6, paddingVertical: 4,
+  },
+  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.success },
+  liveText: { fontSize: 9, fontWeight: '800', color: Colors.success },
   sectionLabel: { fontSize: 11, fontWeight: '700', color: Colors.textSecondary, letterSpacing: 1, marginBottom: 10 },
   chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   typeChip: {
