@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, StatusBar, Dimensions,
+  Modal, TextInput, ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import MapView, { PROVIDER_GOOGLE, Marker } from 'react-native-maps';
@@ -15,6 +16,47 @@ export default function MapaSeguimientoScreen({ route, navigation }: any) {
   const [routeDetails, setRouteDetails] = useState<any | null>(null);
   const mapRef = React.useRef<MapView | null>(null);
   const lastSelectedTripIdRef = React.useRef<string | null>(null);
+
+  const [assistModalVisible, setAssistModalVisible] = useState(false);
+  const [assistMsg, setAssistMsg] = useState('');
+  const [assistSeverity, setAssistSeverity] = useState('Moderado');
+  const [isSubmittingAssist, setIsSubmittingAssist] = useState(false);
+
+  const handleSendAssist = async () => {
+    if (!assistMsg.trim()) {
+      alert('Por favor ingrese el motivo de la asistencia.');
+      return;
+    }
+    
+    setIsSubmittingAssist(true);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const email = userData?.user?.email || 'Pasajero Anónimo';
+
+      const { error } = await supabase.from('incidencias').insert({
+        unidad_placa: selectedBus?.trips?.unidad_placa || 'N/A',
+        ruta_nombre: selectedBus?.trips?.ruta_nombre || 'N/A',
+        tipo: 'Asistencia Pasajero',
+        severidad: assistSeverity,
+        descripcion: `Solicitud de Pasajero (${email}): ${assistMsg}`,
+        estado: 'PENDIENTE',
+        lat: location?.coords.latitude || null,
+        lng: location?.coords.longitude || null
+      });
+
+      if (error) throw error;
+
+      alert('Solicitud de asistencia enviada exitosamente.');
+      setAssistModalVisible(false);
+      setAssistMsg('');
+      setAssistSeverity('Moderado');
+    } catch (e) {
+      console.log('Error al enviar asistencia:', e);
+      alert('Hubo un error al guardar la solicitud de asistencia.');
+    } finally {
+      setIsSubmittingAssist(false);
+    }
+  };
 
   const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371; // Radius of the earth in km
@@ -327,46 +369,164 @@ export default function MapaSeguimientoScreen({ route, navigation }: any) {
 
       {/* Bottom Sheet */}
       <View style={styles.bottomSheet}>
-        <View style={styles.routeRow}>
-          <View style={{ flex: 1, marginRight: 8 }}>
-            <Text style={styles.routeLabel}>RUTA EN CURSO</Text>
+        {selectedBus ? (
+          <>
+            {/* Header info */}
+            <View style={styles.headerRow}>
+              <View style={styles.unitBadge}>
+                <Ionicons name="bus-outline" size={14} color={Colors.primary} />
+                <Text style={styles.unitText}>UNIDAD {selectedBus.trips?.unidad_numero || 'S/N'}</Text>
+              </View>
+              <View style={styles.etaContainer}>
+                <Ionicons name="time-outline" size={16} color={Colors.primary} />
+                <Text style={styles.etaText}>
+                  {routeDetails?.tiempo_min ? `ETA: ~ ${routeDetails.tiempo_min} min` : 'ETA: --'}
+                </Text>
+              </View>
+            </View>
+
+            {/* Route Name */}
             <Text style={styles.routeName} numberOfLines={1} adjustsFontSizeToFit>
-              {selectedBus ? (selectedBus.trips?.ruta_nombre || '--') : 'SIN UNIDADES EN RUTA'}
+              {selectedBus.trips?.ruta_nombre || 'Ruta en curso'}
+            </Text>
+
+            {/* Timeline Visualizer */}
+            <View style={styles.timelineContainer}>
+              <View style={styles.timelineLine}>
+                <View style={[styles.timelineProgress, { width: getProgressWidth() as any }]} />
+              </View>
+              <View style={[styles.timelineBusIndicator, { left: getProgressWidth() as any }]}>
+                <Ionicons name="bus" size={14} color={Colors.white} />
+              </View>
+              <View style={styles.timelineNodesRow}>
+                <View style={styles.timelineNodeContainer}>
+                  <View style={[styles.timelineNodeDot, { backgroundColor: Colors.success }]} />
+                  <Text style={styles.timelineNodeName} numberOfLines={1}>
+                    {routeDetails?.origen || 'Origen'}
+                  </Text>
+                </View>
+                <View style={[styles.timelineNodeContainer, { alignItems: 'flex-end' }]}>
+                  <View style={[styles.timelineNodeDot, { backgroundColor: Colors.danger }]} />
+                  <Text style={styles.timelineNodeName} numberOfLines={1}>
+                    {routeDetails?.destino || 'Destino'}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Info Grid Card */}
+            <View style={styles.detailsCard}>
+              <View style={styles.detailItem}>
+                <Text style={styles.detailLabel}>DISTANCIA</Text>
+                <Text style={styles.detailValue}>
+                  {routeDetails?.distancia_km ? `${routeDetails.distancia_km} km` : '--'}
+                </Text>
+              </View>
+              <View style={[styles.detailItem, { borderLeftWidth: 1, borderRightWidth: 1, borderColor: '#E2E8F0' }]}>
+                <Text style={styles.detailLabel}>VELOCIDAD</Text>
+                <Text style={styles.detailValue}>{selectedBus.speed_kmh} km/h</Text>
+              </View>
+              <View style={styles.detailItem}>
+                <Text style={styles.detailLabel}>PLACA</Text>
+                <Text style={styles.detailValue}>{selectedBus.trips?.unidad_placa || '--'}</Text>
+              </View>
+            </View>
+
+            {/* Actions */}
+            <View style={styles.actionRow}>
+              <TouchableOpacity 
+                style={styles.assistBtn}
+                onPress={() => setAssistModalVisible(true)}
+              >
+                <Ionicons name="help-circle-outline" size={20} color={Colors.white} />
+                <Text style={styles.assistText}>Solicitar Asistencia</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        ) : (
+          <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+            <Ionicons name="information-circle-outline" size={32} color={Colors.textMuted} style={{ marginBottom: 8 }} />
+            <Text style={{ fontSize: 14, fontWeight: '700', color: Colors.textSecondary }}>
+              SIN UNIDADES EN RUTA EN ESTE MOMENTO
             </Text>
           </View>
-          <View style={{ alignItems: 'flex-end' }}>
-            <Text style={styles.etaLabel}>ETA ESTIMADO</Text>
-            <Text style={styles.etaVal}>
-              {routeDetails?.tiempo_min ? `Llegada ~ ${routeDetails.tiempo_min} min` : '--'}
-            </Text>
-          </View>
-        </View>
-        {/* Progress bar */}
-        <View style={styles.progressBg}>
-          <View style={[styles.progressFill, { width: getProgressWidth() as any }]} />
-        </View>
-        <View style={styles.terminalRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.terminalLabel}>ORIGEN</Text>
-            <Text style={styles.terminalName} numberOfLines={1} adjustsFontSizeToFit>
-              {routeDetails?.origen || '--'}
-            </Text>
-          </View>
-          <View style={{ flex: 1, alignItems: 'flex-end' }}>
-            <Text style={styles.terminalLabel}>DESTINO</Text>
-            <Text style={styles.terminalName} numberOfLines={1} adjustsFontSizeToFit>
-              {routeDetails?.destino || '--'}
-            </Text>
-          </View>
-        </View>
-        {/* Actions */}
-        <View style={styles.actionRow}>
-          <TouchableOpacity style={styles.assistBtn}>
-            <Ionicons name="help-circle-outline" size={18} color={Colors.white} />
-            <Text style={styles.assistText}>Solicitar Asistencia</Text>
-          </TouchableOpacity>
-        </View>
+        )}
       </View>
+
+      {/* Modal de Asistencia */}
+      <Modal
+        visible={assistModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setAssistModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Solicitar Asistencia Médica o Técnica</Text>
+            
+            {/* Severity Selector */}
+            <Text style={[styles.detailLabel, { marginBottom: 8 }]}>SEVERIDAD</Text>
+            <View style={styles.severityRow}>
+              {[
+                { label: 'Leve', color: Colors.success },
+                { label: 'Moderado', color: Colors.warning },
+                { label: 'Crítico', color: Colors.danger },
+              ].map((s) => (
+                <TouchableOpacity 
+                  key={s.label} 
+                  style={[
+                    styles.severityChip, 
+                    { borderColor: s.color },
+                    assistSeverity === s.label && { backgroundColor: s.color + '20' }
+                  ]}
+                  onPress={() => setAssistSeverity(s.label)}
+                >
+                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: s.color }} />
+                  <Text style={[styles.severityChipText, { color: s.color }]}>{s.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Message input */}
+            <Text style={[styles.detailLabel, { marginBottom: 8 }]}>DESCRIPCIÓN DEL INCIDENTE</Text>
+            <TextInput
+              style={styles.textArea}
+              multiline
+              numberOfLines={4}
+              placeholder="Describa brevemente la situación o ayuda requerida..."
+              placeholderTextColor={Colors.textMuted}
+              value={assistMsg}
+              onChangeText={setAssistMsg}
+            />
+
+            {/* Actions */}
+            <View style={styles.modalActions}>
+              <TouchableOpacity 
+                style={styles.modalCancelBtn}
+                onPress={() => {
+                  setAssistModalVisible(false);
+                  setAssistMsg('');
+                  setAssistSeverity('Moderado');
+                }}
+                disabled={isSubmittingAssist}
+              >
+                <Text style={styles.modalCancelText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.modalSubmitBtn, isSubmittingAssist && { opacity: 0.7 }]}
+                onPress={handleSendAssist}
+                disabled={isSubmittingAssist}
+              >
+                {isSubmittingAssist ? (
+                  <ActivityIndicator size="small" color={Colors.white} />
+                ) : (
+                  <Text style={styles.modalSubmitText}>Enviar</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -379,6 +539,7 @@ const styles = StyleSheet.create({
     paddingTop: 52, paddingBottom: Spacing.md,
   },
   headerTitle: { color: Colors.white, fontSize: 18, fontWeight: '900', letterSpacing: 1 },
+  
   // Map
   mapContainer: { flex: 1, position: 'relative', overflow: 'hidden', backgroundColor: Colors.background },
   busMarkerLive: {
@@ -413,23 +574,71 @@ const styles = StyleSheet.create({
 
   // Bottom sheet
   bottomSheet: {
-    backgroundColor: Colors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    padding: Spacing.lg, ...Shadow.lg,
+    backgroundColor: Colors.white, borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    padding: 20, ...Shadow.lg,
   },
-  routeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: Spacing.sm },
-  routeLabel: { fontSize: 11, color: Colors.textMuted, fontWeight: '600', letterSpacing: 0.5, marginBottom: 4 },
-  routeName: { fontSize: 26, fontWeight: '800', color: Colors.primary },
-  etaLabel: { fontSize: 11, color: Colors.textMuted, fontWeight: '600', letterSpacing: 0.5, marginBottom: 4, textAlign: 'right' },
-  etaVal: { fontSize: 22, fontWeight: '800', color: Colors.primary, textAlign: 'right' },
-  progressBg: { height: 4, backgroundColor: Colors.border, borderRadius: 2, marginBottom: Spacing.md },
-  progressFill: { height: '100%', backgroundColor: Colors.primary, borderRadius: 2 },
-  terminalRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: Spacing.md },
-  terminalLabel: { fontSize: 10, color: Colors.textMuted, fontWeight: '600', letterSpacing: 1, marginBottom: 3 },
-  terminalName: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  unitBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: '#EFF6FF', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16,
+  },
+  unitText: { fontSize: 13, fontWeight: '700', color: Colors.primary },
+  etaContainer: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  etaText: { fontSize: 13, fontWeight: '700', color: Colors.primary },
+  routeName: { fontSize: 18, fontWeight: '800', color: Colors.textPrimary, marginBottom: 12 },
+  
+  // Timeline
+  timelineContainer: { marginVertical: 8, height: 44, position: 'relative', justifyContent: 'center' },
+  timelineLine: { height: 4, backgroundColor: Colors.border, borderRadius: 2 },
+  timelineProgress: { height: '100%', backgroundColor: Colors.primary, borderRadius: 2 },
+  timelineBusIndicator: {
+    position: 'absolute', top: 8, width: 28, height: 28, borderRadius: 14,
+    backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2, borderColor: Colors.white, marginLeft: -14, ...Shadow.sm,
+  },
+  timelineNodesRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
+  timelineNodeContainer: { flex: 1 },
+  timelineNodeDot: { width: 8, height: 8, borderRadius: 4, marginBottom: 4 },
+  timelineNodeName: { fontSize: 12, fontWeight: '700', color: Colors.textSecondary },
+  
+  // Details card
+  detailsCard: {
+    flexDirection: 'row', backgroundColor: '#F8FAFC', borderRadius: Radius.lg,
+    padding: 12, marginVertical: 14, justifyContent: 'space-between',
+  },
+  detailItem: { alignItems: 'center', flex: 1 },
+  detailLabel: { fontSize: 9, fontWeight: '700', color: Colors.textMuted, letterSpacing: 0.5, marginBottom: 2 },
+  detailValue: { fontSize: 14, fontWeight: '800', color: Colors.textPrimary },
+  
+  // Actions
   actionRow: { flexDirection: 'row', gap: Spacing.sm },
   assistBtn: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: Colors.primary, borderRadius: Radius.md, padding: 16,
+    backgroundColor: '#EF4444', borderRadius: Radius.md, padding: 14, ...Shadow.sm,
   },
-  assistText: { color: Colors.white, fontSize: 15, fontWeight: '700' },
+  assistText: { color: Colors.white, fontSize: 14, fontWeight: '700' },
+
+  // Modal
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  modalContent: { backgroundColor: Colors.white, width: '88%', borderRadius: Radius.xl, padding: 20, ...Shadow.lg },
+  modalTitle: { fontSize: 16, fontWeight: '800', color: Colors.primary, marginBottom: 16, textAlign: 'center' },
+  severityRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
+  severityChip: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4,
+    paddingVertical: 10, borderRadius: Radius.md, borderWidth: 1.5, backgroundColor: Colors.white,
+  },
+  severityChipText: { fontSize: 12, fontWeight: '700' },
+  textArea: {
+    backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.md,
+    padding: 12, height: 80, fontSize: 14, color: Colors.textPrimary, textAlignVertical: 'top',
+    marginBottom: 20,
+  },
+  modalActions: { flexDirection: 'row', gap: 10 },
+  modalCancelBtn: {
+    flex: 1, paddingVertical: 12, borderRadius: Radius.md, borderWidth: 1.5,
+    borderColor: Colors.border, alignItems: 'center',
+  },
+  modalCancelText: { fontSize: 14, fontWeight: '700', color: Colors.textSecondary },
+  modalSubmitBtn: { flex: 1, backgroundColor: Colors.primary, paddingVertical: 12, borderRadius: Radius.md, alignItems: 'center' },
+  modalSubmitText: { fontSize: 14, fontWeight: '700', color: Colors.white },
 });

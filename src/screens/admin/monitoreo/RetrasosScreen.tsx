@@ -1,17 +1,82 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, SafeAreaView, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { Colors, Spacing, Radius, Shadow } from '../../../theme/colors';
-
-const MOCK_DELAYS = [
-  { id: '1', time: '08:15', route: 'Quito — Guayaquil', road: 'TRONCAL PRINCIPAL E35', busId: 'BUS 402', driver: 'Carlos Rivadeneira', delayTime: '15 min', status: 'RETRASADO' },
-  { id: '2', time: '09:30', route: 'Quito — Riobamba', road: 'VÍA ALOAG', busId: 'BUS 115', driver: 'Luis Mendoza', delayTime: '18 min', status: 'RETRASADO' },
-];
+import { supabase } from '../../../lib/supabase';
 
 export default function RetrasosScreen() {
   const navigation = useNavigation();
   const [searchQuery, setSearchQuery] = useState('');
+  const [delays, setDelays] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchDelays = async () => {
+    try {
+      const { data: trips, error: tripsError } = await supabase
+        .from('trips')
+        .select('*');
+      if (tripsError) throw tripsError;
+
+      const { data: routes, error: routesError } = await supabase
+        .from('routes')
+        .select('*');
+      if (routesError) throw routesError;
+
+      const now = new Date();
+      const todayStr = now.toISOString().split('T')[0];
+      const currentHhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+      const delayedTrips = (trips || []).filter(t => {
+        if (t.estado === 'Retrasado') return true;
+        if (t.estado === 'Completado' || t.estado === 'Cancelado') return false;
+        if (t.fecha < todayStr) return true;
+        if (t.fecha === todayStr && t.hora_salida < currentHhmm) return true;
+        return false;
+      }).map(trip => {
+        const route = routes?.find(r => r.id === trip.ruta_id);
+        
+        let delayMinutes = 15;
+        const departureDate = new Date(`${trip.fecha}T${trip.hora_salida}:00`);
+        const diffMs = Date.now() - departureDate.getTime();
+        if (diffMs > 0) {
+          delayMinutes = Math.floor(diffMs / 60000);
+        }
+
+        const delayTimeStr = delayMinutes > 60
+          ? `${Math.floor(delayMinutes / 60)}h ${delayMinutes % 60}m`
+          : `${delayMinutes} min`;
+
+        return {
+          id: trip.id,
+          time: trip.hora_salida,
+          route: trip.ruta_nombre || 'Ruta sin nombre',
+          road: route ? `${route.origen} — ${route.destino}` : 'Ruta no definida',
+          busId: trip.unidad_numero ? `UNIDAD ${trip.unidad_numero}` : `UNIDAD ${trip.unidad_placa || 'S/N'}`,
+          driver: trip.conductor_nombre || 'Conductor no asignado',
+          delayTime: delayTimeStr,
+          status: trip.estado === 'Retrasado' ? 'RETRASADO' : 'FUERA DE TIEMPO',
+          unidad_placa: trip.unidad_placa || ''
+        };
+      });
+
+      setDelays(delayedTrips);
+    } catch (e) {
+      console.log('Error fetching delays:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDelays();
+  }, []);
+
+  const filteredDelays = delays.filter(item => 
+    item.busId.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    item.unidad_placa.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    item.route.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -30,7 +95,7 @@ export default function RetrasosScreen() {
       <View style={styles.searchContainer}>
         <Ionicons name="search" size={20} color={Colors.textMuted} />
         <TextInput 
-          placeholder="Buscar por placa o ID de unidad"
+          placeholder="Buscar por placa, unidad o ruta..."
           style={styles.searchInput}
           placeholderTextColor={Colors.textMuted}
           value={searchQuery}
@@ -39,40 +104,44 @@ export default function RetrasosScreen() {
       </View>
 
       {/* Lista de Retrasos */}
-      <FlatList 
-        data={MOCK_DELAYS}
-        keyExtractor={item => item.id}
-        contentContainerStyle={{ paddingHorizontal: Spacing.md, paddingBottom: 20 }}
-        renderItem={({ item }) => (
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.time}>{item.time}</Text>
-              <Ionicons name="swap-horizontal" size={16} color={Colors.textMuted} />
-              <Text style={styles.route}>{item.route}</Text>
-            </View>
-            <Text style={styles.road}>{item.road}</Text>
-            
-            <View style={styles.infoRow}>
-              <Ionicons name="bus-outline" size={14} color={Colors.textSecondary} />
-              <Text style={styles.infoText}>{item.busId}</Text>
-              <Text style={styles.separator}>|</Text>
-              <Ionicons name="person-outline" size={14} color={Colors.textSecondary} />
-              <Text style={styles.infoText}>{item.driver}</Text>
-            </View>
+      {loading ? (
+        <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 40 }} />
+      ) : (
+        <FlatList 
+          data={filteredDelays}
+          keyExtractor={item => item.id}
+          contentContainerStyle={{ paddingHorizontal: Spacing.md, paddingBottom: 20 }}
+          renderItem={({ item }) => (
+            <View style={styles.card}>
+              <View style={styles.cardHeader}>
+                <Text style={styles.time}>{item.time}</Text>
+                <Ionicons name="swap-horizontal" size={16} color={Colors.textMuted} />
+                <Text style={styles.route}>{item.route}</Text>
+              </View>
+              <Text style={styles.road}>{item.road}</Text>
+              
+              <View style={styles.infoRow}>
+                <Ionicons name="bus-outline" size={14} color={Colors.textSecondary} />
+                <Text style={styles.infoText}>{item.busId}</Text>
+                <Text style={styles.separator}>|</Text>
+                <Ionicons name="person-outline" size={14} color={Colors.textSecondary} />
+                <Text style={styles.infoText}>{item.driver}</Text>
+              </View>
 
-            <View style={styles.footerRow}>
-              <View style={styles.statusBadge}>
-                <View style={styles.statusDot} />
-                <Text style={styles.statusText}>{item.status}</Text>
-              </View>
-              <View style={styles.delayBadge}>
-                <Ionicons name="time" size={14} color={Colors.warning} />
-                <Text style={styles.delayText}>+ {item.delayTime}</Text>
+              <View style={styles.footerRow}>
+                <View style={styles.statusBadge}>
+                  <View style={styles.statusDot} />
+                  <Text style={styles.statusText}>{item.status}</Text>
+                </View>
+                <View style={styles.delayBadge}>
+                  <Ionicons name="time" size={14} color={Colors.warning} />
+                  <Text style={styles.delayText}>+ {item.delayTime}</Text>
+                </View>
               </View>
             </View>
-          </View>
-        )}
-      />
+          )}
+        />
+      )}
     </SafeAreaView>
   );
 }

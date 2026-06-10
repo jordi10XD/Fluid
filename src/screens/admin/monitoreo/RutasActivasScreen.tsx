@@ -1,16 +1,39 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TextInput, FlatList, TouchableOpacity, SafeAreaView, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { Colors, Spacing, Radius, Shadow } from '../../../theme/colors';
-
-const MOCK_ROUTES = [
-  { id: 'R 1', title: 'Milagro - Riobamba', origin: 'Milagro', paradas: 'Autopista Naranjito Bucay, B1, Naranjito', destination: 'Riobamba', distance: '188.7 km', time: '4h 12min' },
-];
+import { supabase } from '../../../lib/supabase';
 
 export default function RutasActivasScreen() {
   const navigation = useNavigation();
   const [searchQuery, setSearchQuery] = useState('');
+  const [routes, setRoutes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchRoutes = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('routes')
+        .select('*')
+        .order('codigo', { ascending: true });
+      if (error) throw error;
+      setRoutes(data || []);
+    } catch (e) {
+      console.log('Error loading routes:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRoutes();
+  }, []);
+
+  const filteredRoutes = routes.filter(item => 
+    item.codigo.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    item.nombre.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -30,7 +53,7 @@ export default function RutasActivasScreen() {
         <View style={styles.searchContainer}>
           <Ionicons name="search" size={20} color={Colors.textMuted} />
           <TextInput 
-            placeholder="Buscar por código o nombre"
+            placeholder="Buscar por código o nombre..."
             style={styles.searchInput}
             placeholderTextColor={Colors.textMuted}
             value={searchQuery}
@@ -43,64 +66,68 @@ export default function RutasActivasScreen() {
       </View>
 
       {/* Lista de Rutas */}
-      <FlatList 
-        data={MOCK_ROUTES}
-        keyExtractor={item => item.id}
-        contentContainerStyle={{ paddingHorizontal: Spacing.md, paddingBottom: 20 }}
-        renderItem={({ item }) => (
-          <View style={styles.card}>
-            <View style={styles.cardTop}>
-              <View>
-                <Text style={styles.routeCode}>{item.id}</Text>
-                <Text style={styles.routeTitle}>{item.title}</Text>
-              </View>
-              <TouchableOpacity style={styles.moreBtn}>
-                <Ionicons name="ellipsis-vertical" size={20} color={Colors.textMuted} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.timeline}>
-              {/* Origin */}
-              <View style={styles.timelineItem}>
-                <View style={[styles.dot, { backgroundColor: Colors.success }]} />
-                <View style={styles.timelineContent}>
-                  <Text style={styles.label}>ORIGEN</Text>
-                  <Text style={styles.value}>{item.origin}</Text>
+      {loading ? (
+        <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 40 }} />
+      ) : (
+        <FlatList 
+          data={filteredRoutes}
+          keyExtractor={item => item.id}
+          contentContainerStyle={{ paddingHorizontal: Spacing.md, paddingBottom: 20 }}
+          renderItem={({ item }) => (
+            <View style={styles.card}>
+              <View style={styles.cardTop}>
+                <View>
+                  <Text style={styles.routeCode}>{item.codigo}</Text>
+                  <Text style={styles.routeTitle}>{item.nombre}</Text>
                 </View>
-              </View>
-              
-              {/* Parada */}
-              <View style={styles.timelineItem}>
-                <View style={[styles.dot, { backgroundColor: 'transparent', borderColor: Colors.border, borderWidth: 2 }]} />
-                <View style={styles.timelineContent}>
-                  <Text style={styles.label}>PARADA INTERMEDIA</Text>
-                  <Text style={styles.value}>{item.paradas}</Text>
-                </View>
+                <TouchableOpacity style={styles.moreBtn}>
+                  <Ionicons name="ellipsis-vertical" size={20} color={Colors.textMuted} />
+                </TouchableOpacity>
               </View>
 
-              {/* Destination */}
-              <View style={styles.timelineItem}>
-                <View style={[styles.dot, { backgroundColor: Colors.danger }]} />
-                <View style={styles.timelineContent}>
-                  <Text style={styles.label}>DESTINO</Text>
-                  <Text style={styles.value}>{item.destination}</Text>
+              <View style={styles.timeline}>
+                {/* Origin */}
+                <View style={styles.timelineItem}>
+                  <View style={[styles.dot, { backgroundColor: Colors.success }]} />
+                  <View style={styles.timelineContent}>
+                    <Text style={styles.label}>ORIGEN</Text>
+                    <Text style={styles.value}>{item.origen}</Text>
+                  </View>
+                </View>
+                
+                {/* Parada */}
+                <View style={styles.timelineItem}>
+                  <View style={[styles.dot, { backgroundColor: 'transparent', borderColor: Colors.border, borderWidth: 2 }]} />
+                  <View style={styles.timelineContent}>
+                    <Text style={styles.label}>PARADA INTERMEDIA</Text>
+                    <Text style={styles.value}>{item.paradas && item.paradas.length > 0 ? item.paradas.join(', ') : 'Ninguna'}</Text>
+                  </View>
+                </View>
+
+                {/* Destination */}
+                <View style={styles.timelineItem}>
+                  <View style={[styles.dot, { backgroundColor: Colors.danger }]} />
+                  <View style={styles.timelineContent}>
+                    <Text style={styles.label}>DESTINO</Text>
+                    <Text style={styles.value}>{item.destino}</Text>
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.footer}>
+                <View style={styles.footerItem}>
+                  <Ionicons name="map-outline" size={14} color={Colors.textSecondary} />
+                  <Text style={styles.footerText}>{item.distancia_km} km</Text>
+                </View>
+                <View style={styles.footerItem}>
+                  <Ionicons name="time-outline" size={14} color={Colors.textSecondary} />
+                  <Text style={styles.footerText}>{`${Math.floor(item.tiempo_min / 60)}h ${item.tiempo_min % 60}min`}</Text>
                 </View>
               </View>
             </View>
-
-            <View style={styles.footer}>
-              <View style={styles.footerItem}>
-                <Ionicons name="map-outline" size={14} color={Colors.textSecondary} />
-                <Text style={styles.footerText}>{item.distance}</Text>
-              </View>
-              <View style={styles.footerItem}>
-                <Ionicons name="time-outline" size={14} color={Colors.textSecondary} />
-                <Text style={styles.footerText}>{item.time}</Text>
-              </View>
-            </View>
-          </View>
-        )}
-      />
+          )}
+        />
+      )}
     </SafeAreaView>
   );
 }

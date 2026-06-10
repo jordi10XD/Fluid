@@ -15,8 +15,8 @@ export default function AlertasCriticasScreen() {
     fetchAlertas();
     
     const subscription = supabase.channel(`incidencias_changes_${Date.now()}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'incidencias' }, payload => {
-        setAlertas(prev => [payload.new, ...prev]);
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'incidencias' }, () => {
+        fetchAlertas();
       })
       .subscribe();
 
@@ -54,16 +54,16 @@ export default function AlertasCriticasScreen() {
   };
 
   const getSeverityBgColor = (sev: string) => {
-    if (sev === 'Leve') return '#F0FDF4'; // Solid light green
-    if (sev === 'Moderado') return '#FFFBEB'; // Solid light amber
-    if (sev === 'Crítico') return '#FEF2F2'; // Solid light red
+    if (sev === 'Leve') return '#F0FDF4'; 
+    if (sev === 'Moderado') return '#FFFBEB'; 
+    if (sev === 'Crítico') return '#FEF2F2'; 
     return Colors.cardBg;
   };
 
   const getSeverityBorderColor = (sev: string) => {
-    if (sev === 'Leve') return '#DCFCE7'; // Subtle green border
-    if (sev === 'Moderado') return '#FEF3C7'; // Subtle amber border
-    if (sev === 'Crítico') return '#FEE2E2'; // Subtle red border
+    if (sev === 'Leve') return '#DCFCE7'; 
+    if (sev === 'Moderado') return '#FEF3C7'; 
+    if (sev === 'Crítico') return '#FEE2E2'; 
     return Colors.border;
   };
 
@@ -110,12 +110,37 @@ export default function AlertasCriticasScreen() {
             const sevColor = getSeverityColor(item.severidad);
             const bgColor = getSeverityBgColor(item.severidad);
             const borderColor = getSeverityBorderColor(item.severidad);
+            const isPassenger = item.tipo === 'Asistencia Pasajero';
+            
             return (
               <View style={[styles.card, { borderLeftColor: sevColor, backgroundColor: bgColor, borderColor: borderColor }]}>
                 <View style={styles.cardHeader}>
-                  <Text style={styles.time}>{formatTime(item.created_at)}</Text>
-                  <Ionicons name="swap-horizontal" size={16} color={Colors.textMuted} />
-                  <Text style={styles.route}>{item.ruta_nombre}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                    <Text style={styles.time}>{formatTime(item.created_at)}</Text>
+                    <Ionicons name="swap-horizontal" size={14} color={Colors.textMuted} />
+                    <Text style={styles.route} numberOfLines={1}>{item.ruta_nombre}</Text>
+                  </View>
+                  
+                  {/* Reporter Badge */}
+                  <View style={[
+                    styles.reporterBadge,
+                    {
+                      backgroundColor: isPassenger ? '#EFF6FF' : '#FFF7ED',
+                      borderColor: isPassenger ? '#BFDBFE' : '#FFEDD5'
+                    }
+                  ]}>
+                    <Ionicons 
+                      name={isPassenger ? 'person-outline' : 'bus-outline'} 
+                      size={10} 
+                      color={isPassenger ? '#2563EB' : '#EA580C'} 
+                    />
+                    <Text style={[
+                      styles.reporterText, 
+                      { color: isPassenger ? '#2563EB' : '#EA580C' }
+                    ]}>
+                      {isPassenger ? 'PASAJERO' : 'CONDUCTOR'}
+                    </Text>
+                  </View>
                 </View>
                 {item.descripcion ? <Text style={styles.road}>{item.descripcion}</Text> : null}
                 
@@ -164,10 +189,10 @@ const styles = StyleSheet.create({
     borderWidth: 1, 
     borderLeftWidth: 4 
   },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 4 },
   time: { fontSize: 18, fontWeight: '900', color: Colors.textPrimary },
-  route: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
-  road: { fontSize: 11, color: Colors.textMuted, fontWeight: '600', letterSpacing: 0.5, marginBottom: 12 },
+  route: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary, flex: 1 },
+  road: { fontSize: 12, color: Colors.textSecondary, fontWeight: '500', marginBottom: 12, lineHeight: 18 },
   infoRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
   infoText: { fontSize: 13, color: Colors.textSecondary, fontWeight: '500' },
   separator: { color: Colors.border, marginHorizontal: 4 },
@@ -180,4 +205,18 @@ const styles = StyleSheet.create({
     borderTopWidth: 1 
   },
   alertText: { fontSize: 13, fontWeight: '700', color: Colors.danger },
+  reporterBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+  },
+  reporterText: {
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
 });

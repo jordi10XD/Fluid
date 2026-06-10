@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Dimensions, StatusBar } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, Dimensions, StatusBar, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import MapView, { PROVIDER_GOOGLE, Marker } from 'react-native-maps';
 import { useNavigation } from '@react-navigation/native';
@@ -7,22 +7,13 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 
-// Importaciones de tema (Ajusta la ruta de los '../' si es necesario según tu proyecto)
 import { Colors, Spacing, Radius, Shadow } from '../../../theme/colors';
-
-// Importación del componente de tarjeta (asegúrate de haberlo creado en la carpeta components)
+import { supabase } from '../../../lib/supabase';
 import PressableStatCard from './components/PressableStatCard';
 import { MonitoreoStackParamList } from './MonitoreoNavigator';
 
-// ─── Tipos y Mock Data (Igual a tu versión original) ────────────────────────
 type BusStatus = 'active' | 'delayed' | 'stopped';
-interface BusData { id: string; lat: number; lng: number; route: string; status: BusStatus }
-
-const BUSES: BusData[] = [
-  { id: '312', lat: -2.1894, lng: -79.8891, route: 'R-012', status: 'active' },
-  { id: '402', lat: -1.6669, lng: -78.6536, route: 'R-001', status: 'active' },
-  { id: '115', lat: -0.2295, lng: -78.5243, route: 'R-001', status: 'delayed' },
-];
+interface BusData { id: string; lat: number; lng: number; route: string; status: BusStatus; unidad_numero: string }
 
 const BUS_COLOR: Record<BusStatus, string> = {
   active:  Colors.success,
@@ -30,10 +21,9 @@ const BUS_COLOR: Record<BusStatus, string> = {
   stopped: Colors.danger,
 };
 
-// ─── Configuración del Panel Deslizable ──────────────────────────────────────
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const MIN_SHEET_HEIGHT = 300; // Altura cuando el panel está minimizado (se ven las 4 tarjetas)
-const MAX_SHEET_HEIGHT = SCREEN_HEIGHT * 0.75; // Altura máxima al expandirse
+const MIN_SHEET_HEIGHT = 300; 
+const MAX_SHEET_HEIGHT = SCREEN_HEIGHT * 0.75; 
 
 type NavProp = StackNavigationProp<MonitoreoStackParamList, 'MonitoreoGlobal'>;
 
@@ -41,23 +31,28 @@ export default function PanelGlobalMonitoreoScreen() {
   const navigation = useNavigation<NavProp>();
   const [selectedBus, setSelectedBus] = useState<string | null>(null);
   
-  // Reanimated valor para la posición en Y del panel
+  const [buses, setBuses] = useState<BusData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({
+    activeBuses: 0,
+    delays: 0,
+    alerts: 0,
+    activeRoutes: 0,
+    totalRoutes: 0,
+  });
+
   const translateY = useSharedValue(0);
 
-  // Configuración del gesto de arrastre (Draggable)
   const gesture = Gesture.Pan()
     .onUpdate((event) => {
-      // Limitamos para que no suba más allá del tope establecido
       if (translateY.value + event.translationY > -(MAX_SHEET_HEIGHT - MIN_SHEET_HEIGHT)) {
         translateY.value = event.translationY;
       }
     })
     .onEnd((event) => {
-      // Si el usuario desliza rápido hacia arriba o pasa la mitad, se expande
       if (event.translationY < -50 || event.velocityY < -500) {
         translateY.value = withSpring(-(MAX_SHEET_HEIGHT - MIN_SHEET_HEIGHT), { damping: 25, stiffness: 180, mass: 0.8 });
       } else {
-        // De lo contrario, regresa a su estado minimizado
         translateY.value = withSpring(0, { damping: 25, stiffness: 180, mass: 0.8 });
       }
     });
@@ -67,6 +62,132 @@ export default function PanelGlobalMonitoreoScreen() {
       transform: [{ translateY: translateY.value }],
     };
   });
+
+  const fetchData = useCallback(async () => {
+    try {
+      // 1. Fetch trips
+      const { data: trips, error: tripsError } = await supabase
+        .from('trips')
+        .select('*');
+      if (tripsError) throw tripsError;
+
+      // 2. Fetch telemetry locations
+      const { data: locations, error: locError } = await supabase
+        .from('trip_locations')
+        .select('*');
+
+      // 3. Fetch routes
+      const { data: routes, error: routesError } = await supabase
+        .from('routes')
+        .select('*');
+
+      // 4. Fetch critical alerts (incidencias)
+      const { data: incidencias, error: incidenciasError } = await supabase
+        .from('incidencias')
+        .select('id, estado')
+        .eq('estado', 'PENDIENTE');
+
+      const tripsList = trips || [];
+      const activeBusesCount = tripsList.filter(t => t.estado === 'En Ruta').length;
+
+      const now = new Date();
+      const todayStr = now.toISOString().split('T')[0];
+      const currentHhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+      const delaysCount = tripsList.filter(t => {
+        if (t.estado === 'Retrasado') return true;
+        if (t.estado === 'Completado' || t.estado === 'Cancelado') return false;
+        if (t.fecha < todayStr) return true;
+        if (t.fecha === todayStr && t.hora_salida < currentHhmm) return true;
+        return false;
+      }).length;
+
+      const alertsCount = incidencias?.length || 0;
+      const totalRoutesCount = routes?.length || 0;
+
+      // Active routes count: unique routes with trips that are En Ruta or En Espera
+      const activeRouteIds = new Set(
+        tripsList
+          .filter(t => t.estado === 'En Ruta' || t.estado === 'En Espera')
+          .map(t => t.ruta_id)
+      );
+      const activeRoutesCount = activeRouteIds.size;
+
+      setStats({
+        activeBuses: activeBusesCount,
+        delays: delaysCount,
+        alerts: alertsCount,
+        activeRoutes: activeRoutesCount,
+        totalRoutes: totalRoutesCount,
+      });
+
+      // Merge active buses for map markers
+      const activeTrips = tripsList.filter(t => t.estado === 'En Ruta');
+      const mergedBuses = activeTrips.map(trip => {
+        const loc = locations?.find(l => l.trip_id === trip.id);
+        const routeInfo = routes?.find(r => r.id === trip.ruta_id);
+
+        let current_location = loc?.current_location;
+        // Fallback to route origin if location is completely missing or null
+        if (!current_location && routeInfo?.origen_coords) {
+          current_location = {
+            type: 'Point',
+            coordinates: [routeInfo.origen_coords.longitude, routeInfo.origen_coords.latitude]
+          };
+        }
+
+        const isDelayed = trip.estado === 'Retrasado' || (() => {
+          if (trip.fecha < todayStr) return true;
+          if (trip.fecha === todayStr && trip.hora_salida < currentHhmm) return true;
+          return false;
+        })();
+
+        return {
+          id: trip.id,
+          lat: current_location?.coordinates[1] || -1.6669,
+          lng: current_location?.coordinates[0] || -78.6536,
+          route: trip.ruta_codigo || 'Ruta',
+          unidad_numero: trip.unidad_numero || 'S/N',
+          status: (isDelayed ? 'delayed' : 'active') as BusStatus
+        };
+      }).filter(b => b.lat !== undefined && b.lng !== undefined);
+
+      setBuses(mergedBuses);
+    } catch (e) {
+      console.log('Error fetching monitoring data:', e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+
+    // Subscribe to changes in trips, locations, and incidents for real-time dashboard updates
+    const tripsChan = supabase.channel(`dashboard_trips_${Date.now()}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'trips' }, () => {
+        fetchData();
+      })
+      .subscribe();
+
+    const locsChan = supabase.channel(`dashboard_locations_${Date.now()}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'trip_locations' }, () => {
+        fetchData();
+      })
+      .subscribe();
+
+    const incidentsChan = supabase.channel(`dashboard_incidents_${Date.now()}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'incidencias' }, () => {
+        fetchData();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(tripsChan);
+      supabase.removeChannel(locsChan);
+      supabase.removeChannel(incidentsChan);
+    };
+  }, [fetchData]);
 
   return (
     <View style={styles.container}>
@@ -78,7 +199,7 @@ export default function PanelGlobalMonitoreoScreen() {
         style={StyleSheet.absoluteFillObject}
         initialRegion={{ latitude: -1.6669, longitude: -78.6536, latitudeDelta: 2.2, longitudeDelta: 2.2 }}
       >
-        {BUSES.map((bus) => (
+        {buses.map((bus) => (
           <Marker
             key={bus.id}
             coordinate={{ latitude: bus.lat, longitude: bus.lng }}
@@ -88,7 +209,7 @@ export default function PanelGlobalMonitoreoScreen() {
               {selectedBus === bus.id && (
                 <View style={[styles.markerLabel, { borderColor: BUS_COLOR[bus.status] }]}>
                   <Text style={[styles.markerLabelText, { color: BUS_COLOR[bus.status] }]}>
-                    BUS {bus.id} · {bus.route}
+                    UNIDAD {bus.unidad_numero} · {bus.route}
                   </Text>
                 </View>
               )}
@@ -130,15 +251,15 @@ export default function PanelGlobalMonitoreoScreen() {
             <View style={styles.row}>
               <PressableStatCard 
                 title="BUSES ACTIVOS" 
-                value="24" 
+                value={loading ? '--' : stats.activeBuses} 
                 icon="bus" 
                 color={Colors.primary}
                 onPress={() => navigation.navigate('BusesActivos')} 
               />
               <PressableStatCard 
                 title="RETRASOS" 
-                value="03" 
-                subtext="Requieren atención"
+                value={loading ? '--' : String(stats.delays).padStart(2, '0')} 
+                subtext={stats.delays > 0 ? "Requieren atención" : "Sin retrasos"}
                 icon="time" 
                 color={Colors.warning}
                 onPress={() => navigation.navigate('Retrasos')} 
@@ -147,16 +268,16 @@ export default function PanelGlobalMonitoreoScreen() {
             <View style={styles.row}>
               <PressableStatCard 
                 title="ALERTAS CRÍTICAS" 
-                value="01" 
-                subtext="Ver detalles →"
+                value={loading ? '--' : String(stats.alerts).padStart(2, '0')} 
+                subtext={stats.alerts > 0 ? "Ver detalles →" : "Todo normal"}
                 icon="warning" 
                 color={Colors.danger}
                 onPress={() => navigation.navigate('AlertasCriticas')} 
               />
               <PressableStatCard 
                 title="RUTAS ACTIVAS" 
-                value="05" 
-                subtext="De 7 programadas" 
+                value={loading ? '--' : String(stats.activeRoutes).padStart(2, '0')} 
+                subtext={`De ${stats.totalRoutes} programadas`} 
                 icon="map" 
                 color={Colors.accent}
                 onPress={() => navigation.navigate('RutasActivas')} 

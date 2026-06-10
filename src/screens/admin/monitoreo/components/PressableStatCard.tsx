@@ -22,7 +22,14 @@ export default function PressableStatCard({
 }: PressableStatCardProps) {
   return (
     <TouchableOpacity
-      style={[styles.card, { backgroundColor: color + '0E' }]}
+      style={[
+        styles.card,
+        {
+          backgroundColor: color + '0E',
+          borderColor: color + '25',
+          borderWidth: 1.5,
+        },
+      ]}
       onPress={onPress}
       activeOpacity={0.7}
     >
@@ -44,7 +51,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
     borderRadius: Radius.xl,
     padding: Spacing.md,
-    ...Shadow.sm,
     justifyContent: 'space-between',
     minHeight: 110,
   },
