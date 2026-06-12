@@ -13,6 +13,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, Shadow } from '../../../../theme/colors';
 
+export type IoniconsName = keyof typeof Ionicons.glyphMap;
+
 // ══════════════════════════════════════════════════════════════════════════════
 // SearchActionBar
 // Buscador contextual + botón "+ Nuevo"
@@ -204,12 +206,12 @@ const ic = StyleSheet.create({
 // ══════════════════════════════════════════════════════════════════════════════
 
 interface EmptyStateProps {
-  icon?:    any;
+  icon?:    IoniconsName;
   message?: string;
 }
 
 export function EmptyState({
-  icon = 'inbox-outline',
+  icon = 'folder-open-outline',
   message = 'No hay registros.',
 }: EmptyStateProps) {
   return (
@@ -297,3 +299,5 @@ const ff = StyleSheet.create({
   label:   { fontSize: 10, fontWeight: '700', color: Colors.textSecondary, letterSpacing: 0.8, marginBottom: 6 },
   error:   { fontSize: 11, color: Colors.danger, marginTop: 4 },
 });
+
+

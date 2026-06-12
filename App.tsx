@@ -3,21 +3,30 @@ import React, { useEffect } from 'react';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import * as Linking from 'expo-linking';
+import { ActivityIndicator, View } from 'react-native';
+
 import { supabase } from './src/lib/supabase';
 import { RoleProvider, useRole } from './src/context/RoleContext';
 import LoginScreen from './src/screens/auth/LoginScreen';
 import RegisterScreen from './src/screens/auth/RegisterScreen';
 import ForgotPasswordScreen from './src/screens/auth/ForgotPasswordScreen';
 import ResetPasswordScreen from './src/screens/auth/ResetPasswordScreen';
-import { PasajeroTabs, ConductorStackNav, AdminTabs } from './src/navigation/AppTabs';
+import { PasajeroTabs, ConductorStackNav, AdminStackNav } from './src/navigation/AppTabs';
 
 const Stack = createStackNavigator();
 export const navigationRef = createNavigationContainerRef();
 
-function RootNavigator() {
-  const { role, setRole, setUserName, setSupabaseUserId } = useRole();
-  const [isReady, setIsReady] = React.useState(false);
+// Wrapper que lee el role EN EL MOMENTO del render
+function AppScreen() {
+  const { role } = useRole();
+  if (role === 'admin') return <AdminStackNav />;
+  if (role === 'conductor') return <ConductorStackNav />;
+  return <PasajeroTabs />;
+}
 
+function RootNavigator() {
+  const { role, setRole, setUserName, setSupabaseUserId, isLoading, setIsLoading } = useRole();
+  
   React.useEffect(() => {
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -56,7 +65,7 @@ function RootNavigator() {
           console.log('Error restoring session', e);
         }
       }
-      setIsReady(true);
+      setIsLoading(false);
     };
     checkSession();
 
@@ -73,12 +82,13 @@ function RootNavigator() {
     };
   }, []);
 
-  const AppTabComponent =
-    role === 'conductor' ? ConductorStackNav :
-    role === 'admin' ? AdminTabs :
-    PasajeroTabs;
-
-  if (!isReady) return null;
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#0F172A" />
+      </View>
+    );
+  }
 
   return (
     <NavigationContainer ref={navigationRef}>
@@ -89,11 +99,13 @@ function RootNavigator() {
         <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
         <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
         {/* App (role-based tabs) */}
-        <Stack.Screen name="App" component={AppTabComponent} />
+        <Stack.Screen name="App" component={AppScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
 }
+
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 export default function App() {
   useEffect(() => {
@@ -133,8 +145,10 @@ export default function App() {
   }, []);
 
   return (
-    <RoleProvider>
-      <RootNavigator />
-    </RoleProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <RoleProvider>
+        <RootNavigator />
+      </RoleProvider>
+    </GestureHandlerRootView>
   );
 }

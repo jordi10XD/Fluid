@@ -10,6 +10,8 @@ interface RoleContextType {
   setUserName: (name: string) => void;
   /** Vincula el dispositivo con el usuario de Supabase en OneSignal */
   setSupabaseUserId: (uid: string | null) => void;
+  isLoading: boolean;
+  setIsLoading: (loading: boolean) => void;
 }
 
 const RoleContext = createContext<RoleContextType>({
@@ -18,11 +20,14 @@ const RoleContext = createContext<RoleContextType>({
   userName: 'Carlos Rivadeneira',
   setUserName: () => {},
   setSupabaseUserId: () => {},
+  isLoading: true,
+  setIsLoading: () => {},
 });
 
 export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [role, setRole] = useState<UserRole>('pasajero');
   const [userName, setUserName] = useState('Carlos Rivadeneira');
+  const [isLoading, setIsLoading] = useState(true);
 
   // Inicializar OneSignal una sola vez al montar la app
   useEffect(() => {
@@ -43,7 +48,7 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <RoleContext.Provider value={{ role, setRole, userName, setUserName, setSupabaseUserId }}>
+    <RoleContext.Provider value={{ role, setRole, userName, setUserName, setSupabaseUserId, isLoading, setIsLoading }}>
       {children}
     </RoleContext.Provider>
   );

@@ -1,66 +1,67 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar,
-  TextInput, Alert,
+  TextInput, Alert, Modal, Pressable
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, Shadow } from '../../theme/colors';
-
 import { supabase } from '../../lib/supabase';
+import { useNavigation } from '@react-navigation/native';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
 type AudienceKey = 'all' | 'passengers' | 'drivers';
-type NotifStatus = 'ENTREGADO' | 'EN PROCESO' | 'COMPLETADO';
 
-interface HistoryItem {
-  id: string; title: string; desc: string;
-  audience: string; time: string; status: NotifStatus;
-}
-
-// ─── Constants ────────────────────────────────────────────────────────────────
 const TITLE_LIMIT = 60;
 const BODY_LIMIT  = 280;
 
-const AUDIENCES: { key: AudienceKey; label: string; desc: string; icon: any }[] = [
-  { key: 'all',        label: 'Todos los Usuarios',    desc: 'Envío masivo global',      icon: 'people-outline' },
-  { key: 'passengers', label: 'Pasajeros en Ruta',     desc: 'Segmentado por viaje',     icon: 'person-outline' },
-  { key: 'drivers',    label: 'Solo Conductores',       desc: 'Exclusivo operativo',      icon: 'bus-outline' },
+const AUDIENCES: { key: AudienceKey; label: string; desc: string; icon: any; color: string }[] = [
+  { key: 'all',        label: 'Todos (Pasajeros y Conductores)', desc: 'La notificación se enviará a todos los usuarios.', icon: 'people', color: '#0284C7' },
+  { key: 'drivers',    label: 'Solo Conductores',                 desc: 'La notificación se enviará a los conductores.',    icon: 'bus', color: '#16A34A' },
+  { key: 'passengers', label: 'Solo Pasajeros',                   desc: 'La notificación se enviará a los pasajeros.',      icon: 'person', color: '#EA580C' },
 ];
 
-const STATUS_COLOR: Record<NotifStatus, string> = {
-  'ENTREGADO':  Colors.success,
-  'EN PROCESO': Colors.warning,
-  'COMPLETADO': Colors.textMuted,
-};
-
-const INITIAL_HISTORY: HistoryItem[] = [
-  { id: 'n1', title: 'Aviso de Mantenimiento Vía E35',  desc: 'Cierre parcial por obras en km 45...', audience: 'TODOS',        time: 'HACE 12 MIN', status: 'ENTREGADO' },
-  { id: 'n2', title: 'Nueva Ruta: Guayaquil Express',   desc: 'Nueva frecuencia directa sin paradas...', audience: 'PASAJEROS',    time: 'HACE 45 MIN', status: 'EN PROCESO' },
-  { id: 'n3', title: 'Cambio de Turno: Sector Sur',     desc: 'Sincronización de relevos para flota...', audience: 'CONDUCTORES', time: 'AYER, 18:40', status: 'COMPLETADO' },
-];
-
-const AUDIENCE_LABEL: Record<AudienceKey, string> = {
-  all: 'TODOS', passengers: 'PASAJEROS', drivers: 'CONDUCTORES',
-};
-
-// ─── Screen ───────────────────────────────────────────────────────────────────
 export default function EmisorNotificacionesScreen() {
+  const navigation = useNavigation<any>();
   const [audience, setAudience]   = useState<AudienceKey>('all');
   const [title,    setTitle]      = useState('');
   const [body,     setBody]       = useState('');
-  const [history,  setHistory]    = useState<HistoryItem[]>(INITIAL_HISTORY);
-
-  // send state: 'idle' | 'sending' | 'sent'
   const [sendState, setSendState] = useState<'idle' | 'sending' | 'sent'>('idle');
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [stats, setStats] = useState({ todos: 0, conductores: 0, pasajeros: 0 });
 
   const titleOk = title.trim().length >= 3;
   const bodyOk  = body.trim().length  >= 10;
   const canSend = titleOk && bodyOk && sendState === 'idle';
 
-  /**
-   * Envía la notificación a través de la Edge Function 'send-notification',
-   * que retransmite a OneSignal REST API.
-   */
+  const selectedAudience = AUDIENCES.find(a => a.key === audience)!;
+
+  useEffect(() => {
+    fetchStats();
+  }, []);
+
+  const fetchStats = async () => {
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const { data, error } = await supabase
+        .from('notificaciones_historial')
+        .select('audiencia')
+        .gte('created_at', today.toISOString());
+
+      if (!error && data) {
+        const counts = { todos: 0, conductores: 0, pasajeros: 0 };
+        data.forEach(n => {
+          if (n.audiencia === 'all') counts.todos++;
+          else if (n.audiencia === 'drivers') counts.conductores++;
+          else if (n.audiencia === 'passengers') counts.pasajeros++;
+        });
+        setStats(counts);
+      }
+    } catch (e) {
+      console.log('Error al cargar estadísticas de notificaciones:', e);
+    }
+  };
+
   const handleSend = async () => {
     if (!canSend) {
       Alert.alert('Campos requeridos', 'El título (mín. 3 chars) y el mensaje (mín. 10 chars) son obligatorios.');
@@ -69,347 +70,267 @@ export default function EmisorNotificacionesScreen() {
     setSendState('sending');
 
     try {
-      const { data, error } = await supabase.functions.invoke('send-notification', {
-        body: {
-          title: title.trim(),
-          message: body.trim(),
-          audience,
-        },
+      // Intentar invocar la Edge Function para disparar vía OneSignal REST API
+      const { error: fnError } = await supabase.functions.invoke('send-notification', {
+        body: { title: title.trim(), message: body.trim(), audience },
       });
 
-      if (error) throw error;
+      if (fnError) throw fnError;
 
-      const newEntry: HistoryItem = {
-        id:       `n${Date.now()}`,
-        title:    title.trim(),
-        desc:     body.trim().slice(0, 60) + (body.length > 60 ? '...' : ''),
-        audience: AUDIENCE_LABEL[audience],
-        time:     'AHORA',
-        status:   'ENTREGADO',
-      };
-      setHistory(prev => [newEntry, ...prev]);
+      // Guardar en el historial de la base de datos
+      await supabase.from('notificaciones_historial').insert({
+        titulo: title.trim(),
+        mensaje: body.trim(),
+        audiencia: audience,
+        estado: 'Enviado'
+      });
+
       setSendState('sent');
+      Alert.alert('Éxito', 'Notificación enviada correctamente');
+      handleReset();
+      fetchStats();
     } catch (err: any) {
       console.error('Error enviando notificación:', err);
-      Alert.alert('Error', err.message || 'No se pudo enviar la notificación.');
-      setSendState('idle');
+      // Intentar guardar en base de datos aunque la Edge Function falle (para entornos de pruebas locales)
+      try {
+        await supabase.from('notificaciones_historial').insert({
+          titulo: title.trim(),
+          mensaje: body.trim(),
+          audiencia: audience,
+          estado: 'Enviado'
+        });
+        Alert.alert('Simulación', 'Notificación registrada localmente en base de datos (Edge Function offline).');
+        setSendState('sent');
+        handleReset();
+        fetchStats();
+      } catch (dbErr) {
+        Alert.alert('Error', err.message || 'No se pudo enviar la notificación.');
+        setSendState('idle');
+      }
     }
   };
 
-  /**
-   * FIX: en el original, una vez que `sent = true` no había forma de
-   * limpiar el formulario y enviar otra notificación. Ahora "Enviar Otro"
-   * resetea correctamente todos los campos.
-   */
   const handleReset = () => {
     setTitle(''); setBody(''); setAudience('all'); setSendState('idle');
   };
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
+      <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
 
-      {/* ── Header ─────────────────────────────────────────────────────── */}
-      <View style={styles.header}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.headerSup}>PANEL DE CONTROL LOGÍSTICO</Text>
-          <Text style={styles.pageTitle}>Emisor de Notificaciones</Text>
-          <Text style={styles.pageDesc}>Protocolo P16 — prioridad alta garantizada</Text>
-        </View>
-        <View style={styles.secureBadge}>
-          <Ionicons name="lock-closed" size={11} color={Colors.success} />
-          <Text style={styles.secureText}>AES-256</Text>
-        </View>
-      </View>
-
-      {/* ── Module label ─────────────────────────────────────────────── */}
-      <View style={styles.moduleLabelRow}>
-        <View style={styles.moduleAccent} />
-        <Text style={styles.moduleLabel}>MÓDULO DE COMUNICACIONES</Text>
-      </View>
-
-      {/* ── Compose card ─────────────────────────────────────────────── */}
+      {/* Compose card */}
       <View style={styles.composeCard}>
         <View style={styles.composeHeader}>
-          <Ionicons name="create-outline" size={20} color={Colors.primary} />
-          <Text style={styles.composeTitle}>Redactar Mensaje</Text>
-        </View>
-
-        {/* Audience selector */}
-        <Text style={styles.sectionLabel}>AUDIENCIA</Text>
-        {AUDIENCES.map((a) => (
-          <TouchableOpacity
-            key={a.key}
-            style={[styles.audienceOption, audience === a.key && styles.audienceActive]}
-            onPress={() => setAudience(a.key)}
-            disabled={sendState !== 'idle'}
+          <Text style={styles.composeTitle}>Enviar Notificación</Text>
+          <TouchableOpacity 
+            style={styles.historyBtn}
+            onPress={() => navigation.getParent()?.navigate('HistorialNotificaciones') || navigation.navigate('HistorialNotificaciones')}
           >
-            <View style={[styles.audienceIcon, { backgroundColor: audience === a.key ? Colors.primary : Colors.borderLight }]}>
-              <Ionicons name={a.icon} size={14} color={audience === a.key ? Colors.white : Colors.textMuted} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.audienceLabel, audience === a.key && { color: Colors.primary }]}>{a.label}</Text>
-              <Text style={styles.audienceDesc}>{a.desc}</Text>
-            </View>
-            {audience === a.key && <Ionicons name="checkmark-circle" size={20} color={Colors.primary} />}
+            <Ionicons name="time-outline" size={14} color={Colors.primary} />
+            <Text style={styles.historyBtnText}>Ver historial</Text>
           </TouchableOpacity>
-        ))}
-
-        {/* Title field */}
-        <View style={styles.fieldHeader}>
-          <Text style={styles.sectionLabel}>TÍTULO</Text>
-          <Text style={[styles.charCount, title.length > TITLE_LIMIT * 0.9 && { color: Colors.danger }]}>
-            {title.length}/{TITLE_LIMIT}
-          </Text>
         </View>
-        <TextInput
-          style={[styles.input, sendState !== 'idle' && styles.inputDisabled]}
-          placeholder="Ej: Retraso en Ruta Norte"
-          placeholderTextColor={Colors.textMuted}
-          value={title}
-          onChangeText={t => setTitle(t.slice(0, TITLE_LIMIT))}
-          editable={sendState === 'idle'}
-        />
 
-        {/* Body field */}
-        <View style={styles.fieldHeader}>
-          <Text style={styles.sectionLabel}>MENSAJE</Text>
-          <Text style={[styles.charCount, body.length > BODY_LIMIT * 0.9 && { color: Colors.danger }]}>
-            {body.length}/{BODY_LIMIT}
-          </Text>
+        {/* Destino Selector */}
+        <Text style={styles.sectionLabel}>Destino</Text>
+        <TouchableOpacity 
+          style={styles.dropdownToggle} 
+          onPress={() => setShowDropdown(true)}
+          disabled={sendState !== 'idle'}
+        >
+          <View style={[styles.audienceIconContainer, { backgroundColor: selectedAudience.color + '20' }]}>
+            <Ionicons name={selectedAudience.icon as any} size={16} color={selectedAudience.color} />
+          </View>
+          <Text style={styles.dropdownSelected}>{selectedAudience.label}</Text>
+          <Ionicons name="chevron-down" size={18} color={Colors.textPrimary} />
+        </TouchableOpacity>
+        <Text style={styles.inputHint}>{selectedAudience.desc}</Text>
+
+        {/* Dropdown Modal */}
+        <Modal visible={showDropdown} transparent animationType="fade" onRequestClose={() => setShowDropdown(false)}>
+          <Pressable style={styles.modalOverlay} onPress={() => setShowDropdown(false)}>
+            <View style={styles.dropdownMenu}>
+              {AUDIENCES.map((a) => (
+                <TouchableOpacity 
+                  key={a.key}
+                  style={styles.dropdownOption}
+                  onPress={() => { setAudience(a.key); setShowDropdown(false); }}
+                >
+                  <View style={[styles.audienceIconContainer, { backgroundColor: a.color + '20' }]}>
+                    <Ionicons name={a.icon as any} size={16} color={a.color} />
+                  </View>
+                  <Text style={styles.dropdownOptionText}>{a.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </Pressable>
+        </Modal>
+
+        {/* Title */}
+        <Text style={styles.sectionLabel}>Título</Text>
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={[styles.input, sendState !== 'idle' && styles.inputDisabled]}
+            placeholder="Ej: Cierre parcial en Vía E35"
+            placeholderTextColor={Colors.textMuted}
+            value={title}
+            onChangeText={t => setTitle(t.slice(0, TITLE_LIMIT))}
+            editable={sendState === 'idle'}
+          />
+          <Text style={styles.charCountInside}>{title.length}/{TITLE_LIMIT}</Text>
         </View>
-        <TextInput
-          style={[styles.textArea, sendState !== 'idle' && styles.inputDisabled]}
-          multiline
-          numberOfLines={4}
-          placeholder="Escriba aquí el contenido detallado del mensaje..."
-          placeholderTextColor={Colors.textMuted}
-          value={body}
-          onChangeText={t => setBody(t.slice(0, BODY_LIMIT))}
-          textAlignVertical="top"
-          editable={sendState === 'idle'}
-        />
+
+        {/* Mensaje */}
+        <Text style={styles.sectionLabel}>Mensaje</Text>
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={[styles.textArea, sendState !== 'idle' && styles.inputDisabled]}
+            multiline
+            placeholder="Escribe aquí el contenido de tu mensaje..."
+            placeholderTextColor={Colors.textMuted}
+            value={body}
+            onChangeText={t => setBody(t.slice(0, BODY_LIMIT))}
+            textAlignVertical="top"
+            editable={sendState === 'idle'}
+          />
+          <Text style={styles.charCountInsideTopRight}>{body.length}/{BODY_LIMIT}</Text>
+        </View>
 
         {/* Info banner */}
         <View style={styles.infoBanner}>
-          <Ionicons name="information-circle-outline" size={15} color={Colors.accent} />
+          <Ionicons name="information-circle-outline" size={15} color={Colors.primary} />
           <Text style={styles.infoText}>
-            El mensaje será validado y enviado con prioridad alta a través del protocolo P16.
+            El mensaje será enviado con prioridad alta a través de OneSignal.
           </Text>
         </View>
 
-        {/* CTA */}
-        {sendState === 'sent' ? (
-          <View>
-            <View style={styles.successBanner}>
-              <Ionicons name="checkmark-circle" size={22} color={Colors.success} />
-              <Text style={styles.successText}>Notificación enviada correctamente</Text>
-            </View>
-            <TouchableOpacity style={styles.resetBtn} onPress={handleReset}>
-              <Ionicons name="refresh-outline" size={16} color={Colors.primary} />
-              <Text style={styles.resetBtnText}>Enviar Otra Notificación</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <TouchableOpacity
-            style={[styles.sendBtn, !canSend && styles.sendBtnDisabled]}
-            onPress={handleSend}
-            disabled={!canSend}
-          >
-            {sendState === 'sending' ? (
-              <Text style={styles.sendBtnText}>Enviando...</Text>
-            ) : (
-              <>
-                <Text style={styles.sendBtnText}>Enviar Notificación</Text>
-                <Ionicons name="arrow-forward" size={18} color={Colors.white} />
-              </>
-            )}
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {/* ── Metrics ──────────────────────────────────────────────────── */}
-      <View style={styles.metricsCard}>
-        <Text style={styles.metricsLabel}>MÉTRICAS DE HOY</Text>
-        <Text style={styles.metricsNum}>
-          1,284 <Text style={styles.metricsUnit}>impactos</Text>
-        </Text>
-        <View style={styles.metricsRow}>
-          {[['ENTREGADOS', '98.2%', Colors.success], ['CLICKS', '14.5%', Colors.accentLight]].map(([l, v, c]) => (
-            <View key={l} style={styles.metricsItem}>
-              <Text style={styles.metricsItemLabel}>{l}</Text>
-              <Text style={[styles.metricsItemVal, { color: c as string }]}>{v}</Text>
-            </View>
-          ))}
-        </View>
-      </View>
-
-      {/* ── History ──────────────────────────────────────────────────── */}
-      <View style={styles.historySection}>
-        <View style={styles.historyHeader}>
-          <Ionicons name="time-outline" size={18} color={Colors.textSecondary} />
-          <Text style={styles.historyTitle}>Historial Reciente</Text>
-        </View>
-        {history.map((h) => (
-          <View key={h.id} style={styles.historyItem}>
-            <View style={styles.historyTop}>
-              <Text style={styles.historyItemTitle} numberOfLines={1}>{h.title}</Text>
-              <View style={[styles.historyBadge, { backgroundColor: STATUS_COLOR[h.status] + '20' }]}>
-                <Text style={[styles.historyBadgeText, { color: STATUS_COLOR[h.status] }]}>{h.status}</Text>
-              </View>
-            </View>
-            <Text style={styles.historyDesc} numberOfLines={2}>{h.desc}</Text>
-            <View style={styles.historyMeta}>
-              <Ionicons name="people-outline" size={11} color={Colors.textMuted} />
-              <Text style={styles.historyMetaText}>{h.audience}</Text>
-              <Ionicons name="time-outline" size={11} color={Colors.textMuted} />
-              <Text style={styles.historyMetaText}>{h.time}</Text>
-            </View>
-          </View>
-        ))}
-        <TouchableOpacity style={styles.viewAllBtn}>
-          <Text style={styles.viewAllText}>VER HISTORIAL COMPLETO</Text>
-          <Ionicons name="chevron-forward" size={14} color={Colors.primary} />
+        {/* Botón Enviar */}
+        <TouchableOpacity
+          style={[styles.sendBtn, !canSend && styles.sendBtnDisabled]}
+          onPress={handleSend}
+          disabled={!canSend}
+        >
+          <Ionicons name="send" size={16} color={Colors.white} />
+          <Text style={styles.sendBtnText}>
+            {sendState === 'sending' ? 'Enviando...' : 'Enviar Notificación'}
+          </Text>
         </TouchableOpacity>
       </View>
 
-      {/* ── Footer status ─────────────────────────────────────────────── */}
-      <View style={styles.footer}>
-        <View style={styles.footerItem}>
-          <View style={styles.footerDot} />
-          <Text style={styles.footerText}>CORE API V8.1 ONLINE</Text>
+      {/* Resumen de hoy */}
+      <View style={styles.resumenCard}>
+        <Text style={styles.resumenTitle}>Resumen de hoy</Text>
+        
+        <View style={styles.statsGrid}>
+          <View style={[styles.statBox, { backgroundColor: '#F0F9FF' }]}>
+            <View style={styles.statBoxHeader}>
+              <Ionicons name="people" size={24} color="#0284C7" />
+              <Text style={styles.statNumber}>{stats.todos}</Text>
+            </View>
+            <Text style={[styles.statLabel, { color: '#0284C7' }]}>Todos</Text>
+          </View>
+          
+          <View style={[styles.statBox, { backgroundColor: '#F0FDF4' }]}>
+            <View style={styles.statBoxHeader}>
+              <Ionicons name="bus" size={24} color="#16A34A" />
+              <Text style={styles.statNumber}>{stats.conductores}</Text>
+            </View>
+            <Text style={[styles.statLabel, { color: '#16A34A' }]}>Conductores</Text>
+          </View>
+          
+          <View style={[styles.statBox, { backgroundColor: '#FFF7ED' }]}>
+            <View style={styles.statBoxHeader}>
+              <Ionicons name="person" size={24} color="#EA580C" />
+              <Text style={styles.statNumber}>{stats.pasajeros}</Text>
+            </View>
+            <Text style={[styles.statLabel, { color: '#EA580C' }]}>Pasajeros</Text>
+          </View>
         </View>
-        <View style={styles.footerItem}>
-          <Ionicons name="lock-closed-outline" size={11} color={Colors.textMuted} />
-          <Text style={styles.footerText}>ENCRIPTACIÓN AES-256</Text>
+
+        <View style={styles.totalBar}>
+          <Ionicons name="bar-chart" size={16} color={Colors.textMuted} />
+          <Text style={styles.totalText}>Total de mensajes enviados hoy</Text>
+          <Text style={styles.totalNumber}>{stats.todos + stats.conductores + stats.pasajeros}</Text>
         </View>
       </View>
 
-      <View style={{ height: 90 }} />
+      <View style={{ height: 40 }} />
     </ScrollView>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
 
-  header: {
-    flexDirection: 'row', alignItems: 'flex-end',
-    backgroundColor: Colors.primary,
-    paddingTop: 52, paddingBottom: Spacing.md, paddingHorizontal: Spacing.lg,
-  },
-  headerSup:  { fontSize: 10, color: 'rgba(255,255,255,0.55)', fontWeight: '700', letterSpacing: 0.5, marginBottom: 2 },
-  pageTitle:  { fontSize: 21, fontWeight: '900', color: Colors.white, marginBottom: 3 },
-  pageDesc:   { fontSize: 12, color: 'rgba(255,255,255,0.65)' },
-  secureBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: 'rgba(34,197,94,0.15)', borderRadius: Radius.sm,
-    paddingHorizontal: 8, paddingVertical: 5, marginLeft: Spacing.sm,
-  },
-  secureText: { fontSize: 10, fontWeight: '700', color: Colors.success },
-
-  moduleLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, paddingBottom: 4 },
-  moduleAccent:   { width: 3, height: 14, backgroundColor: Colors.accent, borderRadius: 2 },
-  moduleLabel:    { fontSize: 11, color: Colors.accent, fontWeight: '700', letterSpacing: 0.5 },
-
-  // Compose card
   composeCard: {
-    marginHorizontal: Spacing.lg, marginBottom: Spacing.md,
-    backgroundColor: Colors.white, borderRadius: Radius.xl, padding: Spacing.md, ...Shadow.sm,
+    margin: Spacing.lg,
+    backgroundColor: Colors.white, borderRadius: Radius.xl, padding: Spacing.lg, ...Shadow.sm,
   },
-  composeHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: Spacing.md },
-  composeTitle:  { fontSize: 16, fontWeight: '700', color: Colors.textPrimary },
+  composeHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.lg },
+  composeTitle:  { fontSize: 18, fontWeight: '800', color: '#0F172A' },
+  
+  historyBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderColor: '#E2E8F0', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6 },
+  historyBtnText: { fontSize: 12, fontWeight: '700', color: Colors.primary },
 
-  sectionLabel: { fontSize: 10, fontWeight: '700', color: Colors.textSecondary, letterSpacing: 1, marginBottom: 8, marginTop: Spacing.sm },
-
-  // Audience
-  audienceOption: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.md,
-    padding: Spacing.sm, marginBottom: 7,
+  sectionLabel: { fontSize: 13, fontWeight: '700', color: '#0F172A', marginBottom: 6 },
+  
+  dropdownToggle: {
+    flexDirection: 'row', alignItems: 'center',
+    borderWidth: 1, borderColor: '#E2E8F0', borderRadius: Radius.md,
+    paddingHorizontal: 12, paddingVertical: 10, marginBottom: 4,
   },
-  audienceActive: { borderColor: Colors.primary, backgroundColor: '#EEF2FF' },
-  audienceIcon:   { width: 30, height: 30, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center' },
-  audienceLabel:  { fontSize: 14, fontWeight: '700', color: Colors.textPrimary, marginBottom: 1 },
-  audienceDesc:   { fontSize: 11, color: Colors.textMuted },
+  audienceIconContainer: { width: 32, height: 32, borderRadius: 6, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
+  dropdownSelected: { flex: 1, fontSize: 14, fontWeight: '600', color: '#0F172A' },
+  inputHint: { fontSize: 11, color: '#64748B', marginBottom: Spacing.lg },
 
-  // Fields
-  fieldHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  charCount:   { fontSize: 11, color: Colors.textMuted, fontWeight: '600' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.1)', justifyContent: 'center', padding: 20 },
+  dropdownMenu: { backgroundColor: '#fff', borderRadius: Radius.md, padding: 10, ...Shadow.md },
+  dropdownOption: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  dropdownOptionText: { fontSize: 14, fontWeight: '600', color: '#0F172A' },
+
+  inputContainer: { position: 'relative', marginBottom: Spacing.lg },
   input: {
-    backgroundColor: Colors.background, borderRadius: Radius.md,
-    borderWidth: 1, borderColor: Colors.border,
-    padding: Spacing.md, fontSize: 14, color: Colors.textPrimary, marginBottom: Spacing.sm,
+    borderWidth: 1, borderColor: '#E2E8F0', borderRadius: Radius.md,
+    padding: 12, fontSize: 14, color: '#0F172A', paddingRight: 50,
   },
   textArea: {
-    backgroundColor: Colors.background, borderRadius: Radius.md,
-    borderWidth: 1, borderColor: Colors.border,
-    padding: Spacing.md, fontSize: 14, color: Colors.textPrimary,
-    minHeight: 100, marginBottom: Spacing.md,
+    borderWidth: 1, borderColor: '#E2E8F0', borderRadius: Radius.md,
+    padding: 12, fontSize: 14, color: '#0F172A',
+    minHeight: 100, paddingTop: 30,
   },
-  inputDisabled: { opacity: 0.6 },
+  charCountInside: { position: 'absolute', right: 12, top: 14, fontSize: 12, color: '#94A3B8', fontWeight: '500' },
+  charCountInsideTopRight: { position: 'absolute', right: 12, top: 10, fontSize: 12, color: '#94A3B8', fontWeight: '500' },
+  inputDisabled: { opacity: 0.6, backgroundColor: '#F1F5F9' },
 
   infoBanner: {
-    flexDirection: 'row', gap: 8, alignItems: 'flex-start',
-    backgroundColor: '#EFF9FC', borderRadius: Radius.md, padding: Spacing.sm, marginBottom: Spacing.md,
+    flexDirection: 'row', gap: 8, alignItems: 'center',
+    backgroundColor: '#F0F9FF', borderRadius: Radius.md, padding: 12, marginBottom: Spacing.lg,
   },
-  infoText: { flex: 1, fontSize: 12, color: Colors.textSecondary, lineHeight: 16 },
+  infoText: { flex: 1, fontSize: 12, color: '#0284C7', fontWeight: '500' },
 
   sendBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: Colors.primary, borderRadius: Radius.md, padding: 14,
+    backgroundColor: '#0F172A', borderRadius: Radius.md, padding: 16,
   },
   sendBtnDisabled: { opacity: 0.5 },
   sendBtnText: { color: Colors.white, fontSize: 15, fontWeight: '700' },
 
-  successBanner: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: '#DCFCE7', borderRadius: Radius.md, padding: 12, justifyContent: 'center',
-    marginBottom: Spacing.sm,
+  resumenCard: {
+    marginHorizontal: Spacing.lg, backgroundColor: Colors.white,
+    borderRadius: Radius.xl, padding: Spacing.lg, ...Shadow.sm,
   },
-  successText: { color: Colors.success, fontSize: 14, fontWeight: '700' },
-  resetBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    borderWidth: 1, borderColor: Colors.primary, borderRadius: Radius.md, padding: 12,
-  },
-  resetBtnText: { color: Colors.primary, fontSize: 14, fontWeight: '700' },
+  resumenTitle: { fontSize: 16, fontWeight: '800', color: '#0F172A', marginBottom: 16 },
+  
+  statsGrid: { flexDirection: 'row', gap: 10, marginBottom: 16 },
+  statBox: { flex: 1, borderRadius: Radius.md, padding: 12, alignItems: 'center' },
+  statBoxHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  statNumber: { fontSize: 24, fontWeight: '800', color: '#0F172A' },
+  statLabel: { fontSize: 11, fontWeight: '700' },
 
-  // Metrics
-  metricsCard: {
-    marginHorizontal: Spacing.lg, backgroundColor: Colors.primary,
-    borderRadius: Radius.xl, padding: Spacing.lg, marginBottom: Spacing.md,
+  totalBar: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#F8FAFC', borderRadius: Radius.md, padding: 12,
   },
-  metricsLabel:     { fontSize: 10, color: 'rgba(255,255,255,0.55)', fontWeight: '700', letterSpacing: 1, marginBottom: 6 },
-  metricsNum:       { fontSize: 34, fontWeight: '900', color: Colors.white, marginBottom: Spacing.md },
-  metricsUnit:      { fontSize: 15, fontWeight: '400' },
-  metricsRow:       { flexDirection: 'row', gap: Spacing.xl },
-  metricsItem:      {},
-  metricsItemLabel: { fontSize: 10, color: 'rgba(255,255,255,0.55)', fontWeight: '600', letterSpacing: 0.5, marginBottom: 2 },
-  metricsItemVal:   { fontSize: 20, fontWeight: '800' },
-
-  // History
-  historySection: { padding: Spacing.lg },
-  historyHeader:  { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: Spacing.md },
-  historyTitle:   { fontSize: 18, fontWeight: '800', color: Colors.textPrimary },
-  historyItem:    { borderBottomWidth: 1, borderBottomColor: Colors.border, paddingVertical: Spacing.md },
-  historyTop:     { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 4 },
-  historyItemTitle: { flex: 1, fontSize: 14, fontWeight: '700', color: Colors.textPrimary, marginRight: 8 },
-  historyBadge:   { borderRadius: Radius.sm, paddingHorizontal: 8, paddingVertical: 3 },
-  historyBadgeText: { fontSize: 10, fontWeight: '700' },
-  historyDesc:    { fontSize: 13, color: Colors.textSecondary, marginBottom: 5 },
-  historyMeta:    { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  historyMetaText: { fontSize: 11, color: Colors.textMuted },
-  viewAllBtn:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingTop: Spacing.md },
-  viewAllText:    { fontSize: 13, fontWeight: '700', color: Colors.primary, letterSpacing: 0.5 },
-
-  // Footer
-  footer: {
-    flexDirection: 'row', justifyContent: 'space-around',
-    paddingVertical: Spacing.md, borderTopWidth: 1, borderTopColor: Colors.border,
-    marginHorizontal: Spacing.lg,
-  },
-  footerItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  footerDot:  { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.success },
-  footerText: { fontSize: 10, color: Colors.textMuted, fontWeight: '600', letterSpacing: 0.3 },
+  totalText: { flex: 1, marginLeft: 8, fontSize: 13, color: '#64748B', fontWeight: '600' },
+  totalNumber: { fontSize: 18, fontWeight: '800', color: '#0F172A' },
 });

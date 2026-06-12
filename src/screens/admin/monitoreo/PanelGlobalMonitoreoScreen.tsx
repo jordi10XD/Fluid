@@ -221,20 +221,6 @@ export default function PanelGlobalMonitoreoScreen() {
         ))}
       </MapView>
 
-      {/* ── Header Flotante (Sobre el mapa) ─────────────────────────────── */}
-      <View style={styles.floatingHeader}>
-        <View>
-          <Text style={styles.headerTitle}>Monitoreo Global</Text>
-          <View style={styles.liveBadge}>
-            <View style={styles.liveDot} />
-            <Text style={styles.liveText}>EN VIVO</Text>
-          </View>
-        </View>
-        <View style={styles.avatarCircle}>
-          <Ionicons name="person" size={18} color={Colors.white} />
-        </View>
-      </View>
-
       {/* ── Panel Inferior Deslizable (Draggable Bottom Sheet) ─────────────── */}
       <GestureDetector gesture={gesture}>
         <Animated.View style={[styles.bottomSheet, animatedSheetStyle]}>
@@ -251,7 +237,7 @@ export default function PanelGlobalMonitoreoScreen() {
             <View style={styles.row}>
               <PressableStatCard 
                 title="BUSES ACTIVOS" 
-                value={loading ? '--' : stats.activeBuses} 
+                value={loading ? '--' : String(stats.activeBuses).padStart(2, '0')} 
                 icon="bus" 
                 color={Colors.primary}
                 onPress={() => navigation.navigate('BusesActivos')} 
@@ -293,22 +279,6 @@ export default function PanelGlobalMonitoreoScreen() {
 // ─── Estilos Corregidos ────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  
-  // Header Flotante
-  floatingHeader: {
-    position: 'absolute',
-    top: 55, left: 20, right: 20,
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    paddingHorizontal: 20, paddingVertical: 14,
-    borderRadius: Radius.xl, 
-    ...Shadow.md,
-  },
-  headerTitle: { fontSize: 18, fontWeight: '900', color: Colors.primary },
-  liveBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 },
-  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.success },
-  liveText: { fontSize: 10, fontWeight: '800', color: Colors.success, letterSpacing: 0.5 },
-  avatarCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center' },
   
   // Marcadores de Mapa
   markerWrap: { alignItems: 'center' },

@@ -941,31 +941,6 @@ const mst = StyleSheet.create({
 // 5. SCREEN — ViajesScreen
 // ══════════════════════════════════════════════════════════════════════════════
 
-// ── Header del panel ──────────────────────────────────────────────────────────
-function ViajesHeader() {
-  const insets = useSafeAreaInsets();
-  return (
-    <View style={[hdr.container, { paddingTop: insets.top + 12 }]}>
-      <Text style={hdr.sup}>OPERACIONES DEL DÍA</Text>
-      <Text style={hdr.title}>Panel de Viajes</Text>
-    </View>
-  );
-}
-
-const hdr = StyleSheet.create({
-  container: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.md,
-  },
-  sup: {
-    fontSize: 10, fontWeight: '700',
-    color: 'rgba(255,255,255,0.55)', letterSpacing: 0.6, marginBottom: 4,
-  },
-  title: { fontSize: 22, fontWeight: '900', color: '#FFF' },
-});
-
-// ── Pantalla principal ────────────────────────────────────────────────────────
 export default function ViajesScreen() {
   const { items, loading, error, create, update, remove } = useViajes();
   const catalogos = useCatalogos();
@@ -994,8 +969,6 @@ export default function ViajesScreen() {
 
   return (
     <View style={scr.container}>
-
-      <ViajesHeader />
 
       <SearchActionBar
         value={search}
