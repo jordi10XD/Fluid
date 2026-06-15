@@ -12,6 +12,7 @@ import RegisterScreen from './src/screens/auth/RegisterScreen';
 import ForgotPasswordScreen from './src/screens/auth/ForgotPasswordScreen';
 import ResetPasswordScreen from './src/screens/auth/ResetPasswordScreen';
 import { PasajeroTabs, ConductorStackNav, AdminStackNav } from './src/navigation/AppTabs';
+import PhotoPromptModal from './src/components/PhotoPromptModal';
 
 const Stack = createStackNavigator();
 export const navigationRef = createNavigationContainerRef();
@@ -19,9 +20,18 @@ export const navigationRef = createNavigationContainerRef();
 // Wrapper que lee el role EN EL MOMENTO del render
 function AppScreen() {
   const { role } = useRole();
-  if (role === 'admin') return <AdminStackNav />;
-  if (role === 'conductor') return <ConductorStackNav />;
-  return <PasajeroTabs />;
+  return (
+    <View style={{ flex: 1 }}>
+      {role === 'admin' ? (
+        <AdminStackNav />
+      ) : role === 'conductor' ? (
+        <ConductorStackNav />
+      ) : (
+        <PasajeroTabs />
+      )}
+      <PhotoPromptModal />
+    </View>
+  );
 }
 
 function RootNavigator() {

@@ -1,9 +1,10 @@
 // src/screens/admin/PerfilAdminScreen.tsx
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, Alert, Modal, TextInput, ActivityIndicator
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, Alert, Modal, TextInput, ActivityIndicator, Image
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { Colors, Spacing, Radius, Shadow } from '../../theme/colors';
 import { useRole } from '../../context/RoleContext';
 import { supabase } from '../../lib/supabase';
@@ -18,6 +19,7 @@ const MENU_ITEMS = [
 export default function PerfilAdminScreen({ navigation }: any) {
   const { setRole, setUserName, setSupabaseUserId } = useRole();
   const [profileData, setProfileData] = useState<any>(null);
+  const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editForm, setEditForm] = useState({ nombres: '', telefono: '' });
@@ -43,9 +45,98 @@ export default function PerfilAdminScreen({ navigation }: any) {
           realName: userData.nombres || user.email?.split('@')[0]
         });
       }
+
+      const { data: photoData } = await supabase
+        .from('user_photos')
+        .select('photo')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (photoData) {
+        setProfilePhoto(photoData.photo);
+      }
     } catch (err) {
       console.error('Error cargando perfil:', err);
     }
+  };
+
+  const handleUpdatePhoto = async () => {
+    const uploadBase64 = async (base64: string) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      setSaving(true);
+      const { error } = await supabase
+        .from('user_photos')
+        .upsert({
+          user_id: user.id,
+          photo: base64,
+        });
+
+      if (error) throw error;
+      setProfilePhoto(base64);
+      Alert.alert('Éxito', 'Foto de perfil actualizada correctamente.');
+    };
+
+    const takePhoto = async () => {
+      try {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permiso requerido', 'Se necesita acceso a la cámara para tomar tu foto de perfil.');
+          return;
+        }
+
+        const result = await ImagePicker.launchCameraAsync({
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.5,
+          base64: true,
+        });
+
+        if (!result.canceled && result.assets[0].base64) {
+          await uploadBase64(result.assets[0].base64);
+        }
+      } catch (e: any) {
+        Alert.alert('Error', e.message || 'No se pudo tomar la foto.');
+      } finally {
+        setSaving(false);
+      }
+    };
+
+    const pickImage = async () => {
+      try {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permiso requerido', 'Se necesita acceso a la galería para seleccionar una foto.');
+          return;
+        }
+
+        const result = await ImagePicker.launchImageLibraryAsync({
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.5,
+          base64: true,
+        });
+
+        if (!result.canceled && result.assets[0].base64) {
+          await uploadBase64(result.assets[0].base64);
+        }
+      } catch (e: any) {
+        Alert.alert('Error', e.message || 'No se pudo seleccionar la foto.');
+      } finally {
+        setSaving(false);
+      }
+    };
+
+    Alert.alert(
+      'Foto de Perfil',
+      '¿Cómo deseas actualizar tu foto de perfil?',
+      [
+        { text: 'Tomar Foto', onPress: takePhoto },
+        { text: 'Elegir de la Galería', onPress: pickImage },
+        { text: 'Cancelar', style: 'cancel' }
+      ]
+    );
   };
 
   const handleLogout = async () => {
@@ -105,14 +196,21 @@ export default function PerfilAdminScreen({ navigation }: any) {
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Perfil */}
         <View style={styles.profileSection}>
-          <View style={styles.avatarContainer}>
-            <View style={styles.avatar}>
-              <Ionicons name="person" size={65} color="#0F172A" />
-            </View>
+          <TouchableOpacity style={styles.avatarContainer} onPress={handleUpdatePhoto}>
+            {profilePhoto ? (
+              <Image 
+                source={{ uri: `data:image/jpeg;base64,${profilePhoto}` }} 
+                style={styles.avatarImage} 
+              />
+            ) : (
+              <View style={styles.avatar}>
+                <Ionicons name="person" size={65} color="#0F172A" />
+              </View>
+            )}
             <View style={styles.badge}>
-              <Ionicons name="checkmark-circle" size={24} color="#22c55e" />
+              <Ionicons name="camera-reverse" size={24} color="#22c55e" />
             </View>
-          </View>
+          </TouchableOpacity>
 
           <Text style={styles.name}>{displayName}</Text>
           <Text style={styles.role}>Administrador del Sistema</Text>
@@ -216,6 +314,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#f1f5f9',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 5,
+    borderColor: '#0F172A',
+  },
+  avatarImage: {
+    width: 130, height: 130, borderRadius: 65,
     borderWidth: 5,
     borderColor: '#0F172A',
   },

@@ -63,7 +63,8 @@ export default function EmisorNotificacionesScreen() {
   };
 
   const handleSend = async () => {
-    if (!canSend) {
+    if (sendState !== 'idle') return;
+    if (!titleOk || !bodyOk) {
       Alert.alert('Campos requeridos', 'El título (mín. 3 chars) y el mensaje (mín. 10 chars) son obligatorios.');
       return;
     }
@@ -206,9 +207,9 @@ export default function EmisorNotificacionesScreen() {
 
         {/* Botón Enviar */}
         <TouchableOpacity
-          style={[styles.sendBtn, !canSend && styles.sendBtnDisabled]}
+          style={[styles.sendBtn, (!titleOk || !bodyOk || sendState !== 'idle') && styles.sendBtnDisabled]}
           onPress={handleSend}
-          disabled={!canSend}
+          disabled={sendState !== 'idle'}
         >
           <Ionicons name="send" size={16} color={Colors.white} />
           <Text style={styles.sendBtnText}>

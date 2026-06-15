@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, Alert, Modal, TextInput, ActivityIndicator
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, Alert, Modal, TextInput, ActivityIndicator, Image
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { Colors, Spacing, Radius, Shadow } from '../../theme/colors';
 import { useRole } from '../../context/RoleContext';
 import { supabase } from '../../lib/supabase';
@@ -17,6 +18,7 @@ const MENU_ITEMS = [
 export default function PerfilUsuarioScreen({ navigation }: any) {
   const { role, setRole, setUserName, setSupabaseUserId } = useRole();
   const [profileData, setProfileData] = useState<any>(null);
+  const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -51,8 +53,103 @@ export default function PerfilUsuarioScreen({ navigation }: any) {
           setProfileData({ ...userData, realName: userData.nombres || user.email?.split('@')[0] });
         }
       }
+
+      const { data: photoData } = await supabase
+        .from('user_photos')
+        .select('photo')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (photoData) {
+        setProfilePhoto(photoData.photo);
+      }
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleUpdatePhoto = async () => {
+    const isDriver = profileData?.role === 'operator';
+
+    const uploadBase64 = async (base64: string) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      setSaving(true);
+      const { error } = await supabase
+        .from('user_photos')
+        .upsert({
+          user_id: user.id,
+          photo: base64,
+        });
+
+      if (error) throw error;
+      setProfilePhoto(base64);
+      Alert.alert('Éxito', 'Foto de perfil actualizada correctamente.');
+    };
+
+    const takePhoto = async () => {
+      try {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permiso requerido', 'Se necesita acceso a la cámara para tomar tu foto de perfil.');
+          return;
+        }
+
+        const result = await ImagePicker.launchCameraAsync({
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.5,
+          base64: true,
+        });
+
+        if (!result.canceled && result.assets[0].base64) {
+          await uploadBase64(result.assets[0].base64);
+        }
+      } catch (e: any) {
+        Alert.alert('Error', e.message || 'No se pudo tomar la foto.');
+      } finally {
+        setSaving(false);
+      }
+    };
+
+    const pickImage = async () => {
+      try {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permiso requerido', 'Se necesita acceso a la galería para seleccionar una foto.');
+          return;
+        }
+
+        const result = await ImagePicker.launchImageLibraryAsync({
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.5,
+          base64: true,
+        });
+
+        if (!result.canceled && result.assets[0].base64) {
+          await uploadBase64(result.assets[0].base64);
+        }
+      } catch (e: any) {
+        Alert.alert('Error', e.message || 'No se pudo seleccionar la foto.');
+      } finally {
+        setSaving(false);
+      }
+    };
+
+    if (isDriver) {
+      takePhoto();
+    } else {
+      Alert.alert(
+        'Foto de Perfil',
+        '¿Cómo deseas actualizar tu foto de perfil?',
+        [
+          { text: 'Tomar Foto', onPress: takePhoto },
+          { text: 'Elegir de la Galería', onPress: pickImage },
+          { text: 'Cancelar', style: 'cancel' }
+        ]
+      );
     }
   };
 
@@ -124,14 +221,21 @@ export default function PerfilUsuarioScreen({ navigation }: any) {
 
       {/* Avatar */}
       <View style={styles.avatarSection}>
-        <View style={styles.avatarFrame}>
-          <View style={styles.avatarPlaceholder}>
-            <Ionicons name="person" size={50} color={Colors.primary} />
-          </View>
+        <TouchableOpacity style={styles.avatarFrame} onPress={handleUpdatePhoto}>
+          {profilePhoto ? (
+            <Image 
+              source={{ uri: `data:image/jpeg;base64,${profilePhoto}` }} 
+              style={styles.avatarImage} 
+            />
+          ) : (
+            <View style={styles.avatarPlaceholder}>
+              <Ionicons name="person" size={50} color={Colors.primary} />
+            </View>
+          )}
           <View style={styles.verifiedBadge}>
-            <Ionicons name="checkmark" size={12} color={Colors.white} />
+            <Ionicons name="camera" size={12} color={Colors.white} />
           </View>
-        </View>
+        </TouchableOpacity>
         <Text style={styles.userName}>{displayName}</Text>
         <View style={styles.idRow}>
           <Ionicons name="mail-outline" size={14} color={Colors.textSecondary} />
@@ -225,6 +329,9 @@ const styles = StyleSheet.create({
   avatarPlaceholder: {
     width: 110, height: 110, borderRadius: 55, borderWidth: 3, borderColor: Colors.primary,
     backgroundColor: Colors.borderLight, alignItems: 'center', justifyContent: 'center',
+  },
+  avatarImage: {
+    width: 110, height: 110, borderRadius: 55, borderWidth: 3, borderColor: Colors.primary,
   },
   verifiedBadge: {
     position: 'absolute', bottom: 4, right: 4,
