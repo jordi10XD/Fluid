@@ -1,8 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-const ONESIGNAL_APP_ID = "f881f787-edb7-4fd8-8704-4c7143b6682b";
-const ONESIGNAL_REST_API_KEY = "os_v2_app_7ca7pb7nw5h5rbyejryuhntifnjvpla54oouyyescftp7ptbzsrbpb3sju66n5fdulqse7fffkjjwseca7mo5p2cfbtwlrsowridvca";
+const ONESIGNAL_APP_ID = Deno.env.get("ONESIGNAL_APP_ID");
+const ONESIGNAL_REST_API_KEY = Deno.env.get("ONESIGNAL_REST_API_KEY");
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -24,6 +24,10 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    if (!ONESIGNAL_APP_ID || !ONESIGNAL_REST_API_KEY) {
+      throw new Error("OneSignal credentials are not configured in Supabase secrets. Please set ONESIGNAL_APP_ID and ONESIGNAL_REST_API_KEY.");
+    }
+
     const payload: NotificationPayload = await req.json();
     const { title, message, audience, external_ids } = payload;
 

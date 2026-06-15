@@ -208,13 +208,20 @@ export default function PerfilUsuarioScreen({ navigation }: any) {
   const displayEmail = profileData?.email || '...';
   const displayPhone = profileData?.telefono || '...';
 
+  const canGoBack = navigation && navigation.canGoBack();
+
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.logoRow}>
-          <Text style={styles.logoText}>Logística Fluida</Text>
+          {canGoBack && (
+            <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginRight: 12 }}>
+              <Ionicons name="arrow-back" size={24} color={Colors.white} />
+            </TouchableOpacity>
+          )}
+          <Text style={[styles.logoText, { flex: 1 }]}>Logística Fluida</Text>
           <Ionicons name="radio-outline" size={20} color={Colors.white} />
         </View>
       </View>

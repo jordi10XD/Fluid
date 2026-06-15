@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import { OneSignal, LogLevel } from 'react-native-onesignal';
 
-const ONESIGNAL_APP_ID = '60a7efb3-fad0-4838-80c0-f7ed3c572c0d';
+const ONESIGNAL_APP_ID = process.env.EXPO_PUBLIC_ONESIGNAL_APP_ID || '60a7efb3-fad0-4838-80c0-f7ed3c572c0d';
 
 /**
  * Inicializa OneSignal SDK.
