@@ -6,6 +6,7 @@
   "exclude": [
     "node_modules",
     "copias",
-    "babel.config.js"
+    "babel.config.js",
+    "supabase"
   ]
 }

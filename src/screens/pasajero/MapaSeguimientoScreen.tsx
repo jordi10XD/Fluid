@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, StatusBar, Dimensions,
-  Modal, TextInput, ActivityIndicator,
+  Modal, TextInput, ActivityIndicator, Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import MapView, { PROVIDER_GOOGLE, Marker } from 'react-native-maps';
@@ -14,6 +14,7 @@ export default function MapaSeguimientoScreen({ route, navigation }: any) {
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [selectedBus, setSelectedBus] = useState<any | null>(null);
   const [routeDetails, setRouteDetails] = useState<any | null>(null);
+  const [driverPhoto, setDriverPhoto] = useState<string | null>(null);
   const mapRef = React.useRef<MapView | null>(null);
   const lastSelectedTripIdRef = React.useRef<string | null>(null);
 
@@ -176,7 +177,9 @@ export default function MapaSeguimientoScreen({ route, navigation }: any) {
             unidad_placa: trip.unidad_placa,
             unidad_numero: trip.unidad_numero,
             ruta_nombre: trip.ruta_nombre,
-            ruta_id: trip.ruta_id
+            ruta_id: trip.ruta_id,
+            conductor_id: trip.conductor_id,
+            conductor_nombre: trip.conductor_nombre
           },
           route_details: routeInfo || null
         };
@@ -271,6 +274,32 @@ export default function MapaSeguimientoScreen({ route, navigation }: any) {
       setRouteDetails(null);
     }
   }, [selectedBus]);
+
+  // Fetch driver profile photo when selectedBus changes
+  useEffect(() => {
+    if (selectedBus?.trips?.conductor_id) {
+      const fetchDriverPhoto = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('user_photos')
+            .select('photo')
+            .eq('user_id', selectedBus.trips.conductor_id)
+            .single();
+          if (!error && data) {
+            setDriverPhoto(data.photo);
+          } else {
+            setDriverPhoto(null);
+          }
+        } catch (err) {
+          console.log('Error fetching driver photo:', err);
+          setDriverPhoto(null);
+        }
+      };
+      fetchDriverPhoto();
+    } else {
+      setDriverPhoto(null);
+    }
+  }, [selectedBus?.trips?.conductor_id]);
 
   return (
     <View style={styles.container}>
@@ -389,6 +418,26 @@ export default function MapaSeguimientoScreen({ route, navigation }: any) {
             <Text style={styles.routeName} numberOfLines={1} adjustsFontSizeToFit>
               {selectedBus.trips?.ruta_nombre || 'Ruta en curso'}
             </Text>
+
+            {/* Conductor Profile Row */}
+            <View style={styles.driverProfileRow}>
+              {driverPhoto ? (
+                <Image 
+                  source={{ uri: `data:image/jpeg;base64,${driverPhoto}` }} 
+                  style={styles.driverAvatar} 
+                />
+              ) : (
+                <View style={styles.driverAvatarPlaceholder}>
+                  <Ionicons name="person" size={20} color={Colors.textSecondary} />
+                </View>
+              )}
+              <View style={styles.driverInfoContainer}>
+                <Text style={styles.driverLabel}>CONDUCTOR ASIGNADO</Text>
+                <Text style={styles.driverName}>
+                  {selectedBus.trips?.conductor_nombre || 'No asignado'}
+                </Text>
+              </View>
+            </View>
 
             {/* Timeline Visualizer */}
             <View style={styles.timelineContainer}>
@@ -641,4 +690,43 @@ const styles = StyleSheet.create({
   modalCancelText: { fontSize: 14, fontWeight: '700', color: Colors.textSecondary },
   modalSubmitBtn: { flex: 1, backgroundColor: Colors.primary, paddingVertical: 12, borderRadius: Radius.md, alignItems: 'center' },
   modalSubmitText: { fontSize: 14, fontWeight: '700', color: Colors.white },
+  driverProfileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: Spacing.sm,
+    marginBottom: Spacing.sm,
+    gap: 12,
+  },
+  driverAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+  },
+  driverAvatarPlaceholder: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  driverInfoContainer: {
+    flex: 1,
+  },
+  driverLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  driverName: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+  },
 });

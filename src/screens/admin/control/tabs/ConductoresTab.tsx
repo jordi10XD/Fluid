@@ -17,7 +17,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 
 import { Colors, Spacing, Radius } from '../../../../theme/colors';
-import { fetchList, createItem, updateItem, deleteItem } from '../shared/supabaseList';
+import { supabase } from '../../../../lib/supabase';
+import { createItem, updateItem, deleteItem } from '../shared/supabaseList';
 import {
   SearchActionBar, ItemCard, EmptyState,
   SkeletonCard, FormField, fieldStyles,
@@ -37,9 +38,10 @@ interface Conductor {
   telefono:       string;
   licencia_num:   string;
   licencia_tipo:  TipoLicencia;
+  hasPhoto?:      boolean;
 }
 
-type ConductorDraft = Omit<Conductor, 'id'>;
+type ConductorDraft = Omit<Conductor, 'id' | 'hasPhoto'>;
 type FormErrors = Partial<Record<keyof ConductorDraft, string>>;
 
 const EMPTY_DRAFT: ConductorDraft = {
@@ -65,10 +67,47 @@ function useConductores() {
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const result = await fetchList<Conductor>('driver_profiles', 'nombre', true);
-    if (result.error) setError(result.error);
-    else              setItems(result.data);
-    setLoading(false);
+    try {
+      // 1. Fetch driver profiles
+      const { data: drivers, error: driversError } = await supabase
+        .from('driver_profiles')
+        .select('*')
+        .order('nombre', { ascending: true });
+
+      if (driversError) throw driversError;
+
+      // 2. Fetch users to map email to user ID
+      const { data: users, error: usersError } = await supabase
+        .from('users')
+        .select('id, email')
+        .eq('role', 'operator');
+
+      if (usersError) throw usersError;
+
+      // 3. Fetch all user photos
+      const { data: photos, error: photosError } = await supabase
+        .from('user_photos')
+        .select('user_id');
+
+      if (photosError) throw photosError;
+
+      const photoUserIds = new Set(photos?.map(p => p.user_id) || []);
+
+      const mappedDrivers = (drivers || []).map((d: any) => {
+        const matchingUser = users?.find(u => u.email?.toLowerCase() === d.email?.toLowerCase());
+        const hasPhoto = matchingUser ? photoUserIds.has(matchingUser.id) : false;
+        return {
+          ...d,
+          hasPhoto,
+        };
+      });
+
+      setItems(mappedDrivers);
+    } catch (e: any) {
+      setError(e.message || 'Error al cargar conductores');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
@@ -366,6 +405,25 @@ export default function ConductoresTab() {
                   label="Licencia"
                   value={`${item.licencia_num}  ·  Tipo ${item.licencia_tipo}`}
                 />
+                <View style={screen.photoStatusRow}>
+                  <Ionicons 
+                    name="camera-outline" 
+                    size={14} 
+                    color={item.hasPhoto ? '#16A34A' : '#DC2626'} 
+                  />
+                  <Text style={screen.infoLabel}>Foto Perfil</Text>
+                  <View style={[
+                    screen.photoStatusBadge, 
+                    { backgroundColor: item.hasPhoto ? '#DCFCE7' : '#FEE2E2' }
+                  ]}>
+                    <Text style={[
+                      screen.photoStatusText, 
+                      { color: item.hasPhoto ? '#16A34A' : '#DC2626' }
+                    ]}>
+                      {item.hasPhoto ? 'REGISTRADA' : 'NO REGISTRADA'}
+                    </Text>
+                  </View>
+                </View>
               </View>
             </ItemCard>
           )}
@@ -402,4 +460,21 @@ const screen = StyleSheet.create({
   infoRow:    { flexDirection: 'row', alignItems: 'center', gap: 6 },
   infoLabel:  { fontSize: 11, color: Colors.textMuted, width: 58 },
   infoValue:  { flex: 1, fontSize: 13, color: Colors.textPrimary, fontWeight: '500' },
+
+  photoStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
+  photoStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: Radius.full,
+  },
+  photoStatusText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
 });

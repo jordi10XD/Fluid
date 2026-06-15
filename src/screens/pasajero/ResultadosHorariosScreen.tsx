@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  StatusBar, ActivityIndicator, SafeAreaView
+  StatusBar, ActivityIndicator, SafeAreaView, Image
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, Shadow } from '../../theme/colors';
@@ -28,7 +28,9 @@ interface TripItem {
   ruta_id: string;
   ruta_nombre: string;
   ruta_codigo: string;
+  conductor_id?: string;
   conductor_nombre: string;
+  conductor_photo?: string | null;
   hora_salida: string;
   estado: string;
   razon_cancelacion: string;
@@ -77,6 +79,7 @@ export default function ResultadosHorariosScreen({ route, navigation }: any) {
         ruta_id,
         ruta_nombre,
         ruta_codigo,
+        conductor_id,
         conductor_nombre,
         hora_salida,
         estado,
@@ -95,14 +98,27 @@ export default function ResultadosHorariosScreen({ route, navigation }: any) {
       const { data: telemetryData } = await supabase.from('trip_locations').select('trip_id, speed_kmh, recorded_at');
       const telemetryList = (telemetryData || []) as TelemetryDetails[];
 
+      // 3.5 Fetch photos for all drivers on matching trips
+      const conductorIds = Array.from(new Set(rawTrips.map(t => t.conductor_id).filter(id => !!id)));
+      let photosData: { user_id: string; photo: string }[] = [];
+      if (conductorIds.length > 0) {
+        const { data: photos } = await supabase
+          .from('user_photos')
+          .select('user_id, photo')
+          .in('user_id', conductorIds);
+        photosData = photos || [];
+      }
+
       // 4. Merge in memory
       const mergedTrips: TripItem[] = rawTrips.map(trip => {
         const matchingRoute = routes.find(r => r.id === trip.ruta_id) || null;
         const matchingTelemetry = telemetryList.find(t => t.trip_id === trip.id) || null;
+        const matchingPhoto = photosData.find(p => p.user_id === trip.conductor_id)?.photo || null;
         return {
           ...trip,
           route_details: matchingRoute,
-          telemetry: matchingTelemetry
+          telemetry: matchingTelemetry,
+          conductor_photo: matchingPhoto
         };
       });
 
@@ -239,6 +255,23 @@ export default function ResultadosHorariosScreen({ route, navigation }: any) {
                     <View style={[styles.statusBadge, { backgroundColor: statusBg }]}>
                       <Text style={[styles.statusBadgeText, { color: statusColor }]}>{statusText}</Text>
                     </View>
+                  </View>
+
+                  {/* Conductor info bar */}
+                  <View style={styles.driverBar}>
+                    {trip.conductor_photo ? (
+                      <Image 
+                        source={{ uri: `data:image/jpeg;base64,${trip.conductor_photo}` }} 
+                        style={styles.driverCardAvatar} 
+                      />
+                    ) : (
+                      <View style={styles.driverCardAvatarPlaceholder}>
+                        <Ionicons name="person" size={10} color={Colors.textSecondary} />
+                      </View>
+                    )}
+                    <Text style={styles.driverBarText}>
+                      Conductor: <Text style={styles.driverBarName}>{trip.conductor_nombre || 'No asignado'}</Text>
+                    </Text>
                   </View>
 
                   <View style={styles.cardBody}>
@@ -409,4 +442,38 @@ const styles = StyleSheet.create({
 
   emptyContainer: { alignItems: 'center', padding: 40, gap: 8 },
   emptyText: { fontSize: 14, color: Colors.textSecondary, fontWeight: '600', textAlign: 'center' },
+  driverBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: Radius.sm,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    marginBottom: Spacing.sm,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  driverCardAvatar: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+  },
+  driverCardAvatarPlaceholder: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  driverBarText: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    fontWeight: '500',
+  },
+  driverBarName: {
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
 });

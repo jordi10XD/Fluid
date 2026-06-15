@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, Dimensions, StatusBar, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, StatusBar, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import MapView, { PROVIDER_GOOGLE, Marker } from 'react-native-maps';
 import { useNavigation } from '@react-navigation/native';
@@ -270,6 +270,18 @@ export default function PanelGlobalMonitoreoScreen() {
               />
             </View>
           </View>
+
+          {/* Botón de Reportes */}
+          <View style={styles.reportesContainer}>
+            <TouchableOpacity 
+              style={styles.reportesBtn} 
+              activeOpacity={0.8}
+              onPress={() => (navigation as any).navigate('Reportes')}
+            >
+              <Text style={styles.reportesBtnText}>Reportes</Text>
+              <Ionicons name="document-text" size={20} color={Colors.white} style={{ marginLeft: 8 }} />
+            </TouchableOpacity>
+          </View>
         </Animated.View>
       </GestureDetector>
     </View>
@@ -310,4 +322,20 @@ const styles = StyleSheet.create({
   // Grid de Tarjetas
   grid: { gap: 12 },
   row: { flexDirection: 'row', gap: 12 },
+
+  // Botón Reportes
+  reportesContainer: { marginTop: 20 },
+  reportesBtn: {
+    backgroundColor: '#0f172a', 
+    borderRadius: Radius.md,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reportesBtnText: {
+    color: Colors.white,
+    fontSize: 16,
+    fontWeight: '700',
+  },
 });

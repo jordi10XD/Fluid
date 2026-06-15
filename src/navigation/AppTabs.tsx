@@ -23,6 +23,7 @@ import EmisorNotificacionesScreen from '../screens/admin/EmisorNotificacionesScr
 import ViajesScreen from '../screens/admin/ViajesScreen';
 import HistorialNotificacionesScreen from '../screens/admin/HistorialNotificacionesScreen';
 import PerfilAdminScreen from '../screens/admin/PerfilAdminScreen';
+import ReportesScreen from '../screens/admin/ReportesScreen';
 
 // Admin monitoreo sub-screens
 import BusesActivosScreen from '../screens/admin/monitoreo/BusesActivosScreen';
@@ -156,6 +157,7 @@ export function AdminStackNav() {
       <AdminStack.Screen name="AlertasCriticas" component={AlertasCriticasScreen} />
       <AdminStack.Screen name="RutasActivas" component={RutasActivasScreen} />
       <AdminStack.Screen name="Retrasos" component={RetrasosScreen} />
+      <AdminStack.Screen name="Reportes" component={ReportesScreen} />
     </AdminStack.Navigator>
   );
 }
