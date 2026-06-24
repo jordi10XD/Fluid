@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, StatusBar, 
-  Animated, PanResponder, Dimensions, Modal
+  Animated, PanResponder, Dimensions, Modal, Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import MapView, { PROVIDER_GOOGLE, Marker } from 'react-native-maps';
@@ -190,6 +190,44 @@ export default function MapaNavegacionScreen({ navigation }: any) {
     }
   };
 
+  const handleEndTrip = () => {
+    Alert.alert(
+      '¿Terminar viaje?',
+      'Esta acción finalizará el viaje actual y detendrá la transmisión de ubicación.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { 
+          text: 'Sí, Terminar', 
+          style: 'destructive',
+          onPress: async () => {
+            if (!activeTrip) return;
+            try {
+              // Update trip status to Finalizado
+              const { error: tripError } = await supabase
+                .from('trips')
+                .update({ estado: 'Finalizado' })
+                .eq('id', activeTrip.id);
+
+              if (tripError) throw tripError;
+
+              // Delete telemetry location
+              await supabase
+                .from('trip_locations')
+                .delete()
+                .eq('trip_id', activeTrip.id);
+
+              Alert.alert('Viaje Finalizado', 'El viaje ha terminado exitosamente.');
+              navigation.goBack();
+            } catch (err: any) {
+              console.log('Error finishing trip:', err);
+              Alert.alert('Error', 'No se pudo finalizar el viaje.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const calculateETA = () => {
     const now = new Date();
     now.setMinutes(now.getMinutes() + routeInfo.duration);
@@ -361,6 +399,11 @@ export default function MapaNavegacionScreen({ navigation }: any) {
             <Ionicons name="warning-outline" size={18} color={Colors.white} />
             <Text style={styles.incidentBtnText}>REPORTAR INCIDENCIA</Text>
           </TouchableOpacity>
+
+          <TouchableOpacity style={styles.endTripBtn} onPress={handleEndTrip}>
+            <Ionicons name="stop-circle-outline" size={18} color={Colors.white} />
+            <Text style={styles.endTripBtnText}>TERMINAR VIAJE</Text>
+          </TouchableOpacity>
         </View>
       </Animated.View>
 
@@ -455,6 +498,13 @@ const styles = StyleSheet.create({
     ...Shadow.md,
   },
   incidentBtnText: { fontSize: 15, fontWeight: '800', color: Colors.white, letterSpacing: 1 },
+  endTripBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    borderRadius: Radius.md, padding: 16, backgroundColor: '#DC2626',
+    marginTop: Spacing.md,
+    ...Shadow.md,
+  },
+  endTripBtnText: { fontSize: 15, fontWeight: '800', color: Colors.white, letterSpacing: 1 },
   startPoint: { width: 28, height: 28, borderRadius: 14, backgroundColor: Colors.success, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: Colors.white },
   startPointText: { color: Colors.white, fontSize: 13, fontWeight: '800' },
   centerBtn: {

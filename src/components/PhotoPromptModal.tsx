@@ -16,6 +16,11 @@ export default function PhotoPromptModal() {
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
 
+  // Reset skipped status only when the user changes
+  useEffect(() => {
+    setSkipped(false);
+  }, [userId]);
+
   const checkUserAndPhoto = useCallback(async () => {
     setChecking(true);
     try {
@@ -35,7 +40,6 @@ export default function PhotoPromptModal() {
           setHasPhoto(true);
         } else {
           setHasPhoto(false);
-          setSkipped(false);
         }
       } else {
         setUserId(null);

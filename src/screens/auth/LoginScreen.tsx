@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, KeyboardAvoidingView, Platform, StatusBar, Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
@@ -21,6 +22,7 @@ export default function LoginScreen({ navigation }: any) {
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [error, setError] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -28,6 +30,7 @@ export default function LoginScreen({ navigation }: any) {
       return;
     }
     setError(false);
+    setLoading(true);
     
     try {
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
@@ -41,6 +44,8 @@ export default function LoginScreen({ navigation }: any) {
       }
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Credenciales incorrectas');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -72,6 +77,10 @@ export default function LoginScreen({ navigation }: any) {
         throw new Error('Usuario no encontrado en la base de datos');
       }
 
+      if (userData.blocked) {
+        throw new Error('Tu cuenta ha sido bloqueada por el administrador.');
+      }
+
       setSupabaseUserId(user.id);
       
       let finalRole: UserRole = 'pasajero';
@@ -97,6 +106,7 @@ export default function LoginScreen({ navigation }: any) {
   };
 
   const handleGoogleLogin = async () => {
+    setLoading(true);
     try {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -141,6 +151,8 @@ export default function LoginScreen({ navigation }: any) {
     } catch (error: any) {
       console.error(error);
       Alert.alert('Error', error.message || 'No se pudo iniciar sesión');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -206,8 +218,16 @@ export default function LoginScreen({ navigation }: any) {
         </View>
 
         {/* CTA */}
-        <TouchableOpacity style={styles.loginBtn} onPress={handleLogin}>
-          <Text style={styles.loginBtnText}>Entrar</Text>
+        <TouchableOpacity 
+          style={[styles.loginBtn, loading && { opacity: 0.7 }]} 
+          onPress={handleLogin}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color={Colors.white} />
+          ) : (
+            <Text style={styles.loginBtnText}>Entrar</Text>
+          )}
         </TouchableOpacity>
 
         {/* Social */}
@@ -218,11 +238,18 @@ export default function LoginScreen({ navigation }: any) {
         </View>
         <View style={styles.socialRow}>
           <TouchableOpacity 
-            style={[styles.socialBtn, { flex: undefined, width: '100%' }]}
+            style={[styles.socialBtn, { flex: undefined, width: '100%' }, loading && { opacity: 0.7 }]}
             onPress={handleGoogleLogin}
+            disabled={loading}
           >
-            <Ionicons name="logo-google" size={20} color={Colors.textPrimary} />
-            <Text style={styles.socialText}>Continuar con Google</Text>
+            {loading ? (
+              <ActivityIndicator color={Colors.textPrimary} />
+            ) : (
+              <>
+                <Ionicons name="logo-google" size={20} color={Colors.textPrimary} />
+                <Text style={styles.socialText}>Continuar con Google</Text>
+              </>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -231,32 +258,38 @@ export default function LoginScreen({ navigation }: any) {
           <Text style={{ textAlign: 'center', fontSize: 12, color: Colors.textMuted, marginBottom: 10 }}>DEV FAST LOGIN</Text>
           <View style={{ flexDirection: 'row', gap: 10 }}>
             <TouchableOpacity 
-              style={{ flex: 1, backgroundColor: '#333', padding: 10, borderRadius: 8, alignItems: 'center' }}
+              style={[{ flex: 1, backgroundColor: '#333', padding: 10, borderRadius: 8, alignItems: 'center' }, loading && { opacity: 0.7 }]}
               onPress={() => {
+                if (loading) return;
                 setEmail('admin@fluid.com');
                 setPassword('123456');
                 setTimeout(() => handleLogin(), 100); // Give state time to update
               }}
+              disabled={loading}
             >
               <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>Admin</Text>
             </TouchableOpacity>
             <TouchableOpacity 
-              style={{ flex: 1, backgroundColor: '#333', padding: 10, borderRadius: 8, alignItems: 'center' }}
+              style={[{ flex: 1, backgroundColor: '#333', padding: 10, borderRadius: 8, alignItems: 'center' }, loading && { opacity: 0.7 }]}
               onPress={() => {
+                if (loading) return;
                 setEmail('conductor@fluid.com');
                 setPassword('123456');
                 setTimeout(() => handleLogin(), 100);
               }}
+              disabled={loading}
             >
               <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>Cond.</Text>
             </TouchableOpacity>
             <TouchableOpacity 
-              style={{ flex: 1, backgroundColor: '#333', padding: 10, borderRadius: 8, alignItems: 'center' }}
+              style={[{ flex: 1, backgroundColor: '#333', padding: 10, borderRadius: 8, alignItems: 'center' }, loading && { opacity: 0.7 }]}
               onPress={() => {
+                if (loading) return;
                 setEmail('pasajero@fluid.com');
                 setPassword('123456');
                 setTimeout(() => handleLogin(), 100);
               }}
+              disabled={loading}
             >
               <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>Pasaj.</Text>
             </TouchableOpacity>

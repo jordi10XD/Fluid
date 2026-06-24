@@ -1,8 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-const ONESIGNAL_APP_ID = Deno.env.get("ONESIGNAL_APP_ID");
-const ONESIGNAL_REST_API_KEY = Deno.env.get("ONESIGNAL_REST_API_KEY");
+const ONESIGNAL_APP_ID = Deno.env.get("ONESIGNAL_APP_ID") || "60a7efb3-fad0-4838-80c0-f7ed3c572c0d";
+const ONESIGNAL_REST_API_KEY = Deno.env.get("ONESIGNAL_REST_API_KEY") || "os_v2_app_7ca7pb7nw5h5rbyejryuhntifnjvpla54oouyyescftp7ptbzsrbpb3sju66n5fdulqse7fffkjjwseca7mo5p2cfbtwlrsowridvca";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

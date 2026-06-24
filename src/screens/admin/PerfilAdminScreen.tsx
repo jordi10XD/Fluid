@@ -10,10 +10,10 @@ import { useRole } from '../../context/RoleContext';
 import { supabase } from '../../lib/supabase';
 
 const MENU_ITEMS = [
-  { icon: 'person-outline', title: 'Mis Datos', desc: 'Información personal' },
-  { icon: 'settings-outline', title: 'Configuración', desc: 'Ajustes del panel' },
-  { icon: 'notifications-outline', title: 'Notificaciones', desc: 'Preferencias de alertas' },
-  { icon: 'shield-checkmark-outline', title: 'Seguridad', desc: 'Gestión de accesos' },
+  { icon: 'person-outline', title: 'Mis Datos', desc: 'Información personal', action: 'mis_datos' },
+  { icon: 'settings-outline', title: 'Configuración', desc: 'Ajustes del panel', action: 'config' },
+  { icon: 'notifications-outline', title: 'Notificaciones', desc: 'Preferencias de alertas', action: 'notif' },
+  { icon: 'shield-checkmark-outline', title: 'Seguridad', desc: 'Gestión de accesos y contraseña', action: 'seguridad' },
 ];
 
 export default function PerfilAdminScreen({ navigation }: any) {
@@ -21,8 +21,12 @@ export default function PerfilAdminScreen({ navigation }: any) {
   const [profileData, setProfileData] = useState<any>(null);
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [securityModalVisible, setSecurityModalVisible] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
   const [editForm, setEditForm] = useState({ nombres: '', telefono: '' });
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
   useEffect(() => {
     loadProfile();
@@ -176,6 +180,46 @@ export default function PerfilAdminScreen({ navigation }: any) {
     }
   };
 
+  const handleSavePassword = async () => {
+    if (!newPassword) {
+      Alert.alert('Error', 'Por favor, introduce la nueva contraseña.');
+      return;
+    }
+    if (newPassword.length < 6) {
+      Alert.alert('Error', 'La contraseña debe tener al menos 6 caracteres.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      Alert.alert('Error', 'Las contraseñas no coinciden.');
+      return;
+    }
+    setSavingPassword(true);
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+      if (error) throw error;
+      setSecurityModalVisible(false);
+      Alert.alert('Éxito', 'Contraseña actualizada correctamente.');
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'No se pudo actualizar la contraseña.');
+    } finally {
+      setSavingPassword(false);
+    }
+  };
+
+  const handleMenuPress = (action: string) => {
+    if (action === 'mis_datos') {
+      openMisDatos();
+    } else if (action === 'seguridad') {
+      setNewPassword('');
+      setConfirmPassword('');
+      setSecurityModalVisible(true);
+    } else {
+      Alert.alert('Configuración', 'Esta preferencia es administrada automáticamente por la plataforma.');
+    }
+  };
+
   const displayName = profileData?.realName || 'Administrador';
   const displayEmail = profileData?.email || '';
   const displayPhone = profileData?.telefono || '';
@@ -233,7 +277,7 @@ export default function PerfilAdminScreen({ navigation }: any) {
         {/* Menú */}
         <View style={styles.menuSection}>
           {MENU_ITEMS.map((item, index) => (
-            <TouchableOpacity key={index} style={styles.menuItem} onPress={openMisDatos}>
+            <TouchableOpacity key={index} style={styles.menuItem} onPress={() => handleMenuPress(item.action)}>
               <View style={styles.menuIcon}>
                 <Ionicons name={item.icon as any} size={24} color="#0F172A" />
               </View>
@@ -284,6 +328,43 @@ export default function PerfilAdminScreen({ navigation }: any) {
             
             <TouchableOpacity style={styles.saveBtn} onPress={handleSaveMisDatos} disabled={saving}>
               {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Guardar Cambios</Text>}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Security Modal */}
+      <Modal visible={securityModalVisible} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setSecurityModalVisible(false)}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Seguridad y Acceso</Text>
+            <TouchableOpacity onPress={() => setSecurityModalVisible(false)}>
+              <Ionicons name="close" size={24} color="#0F172A" />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.modalBody}>
+            <Text style={styles.inputLabel}>Nueva Contraseña</Text>
+            <TextInput 
+              style={styles.textInput} 
+              value={newPassword} 
+              onChangeText={setNewPassword}
+              placeholder="Mínimo 6 caracteres"
+              placeholderTextColor="#94a3b8"
+              secureTextEntry
+            />
+            
+            <Text style={styles.inputLabel}>Confirmar Nueva Contraseña</Text>
+            <TextInput 
+              style={styles.textInput} 
+              value={confirmPassword} 
+              onChangeText={setConfirmPassword}
+              placeholder="Confirmar contraseña"
+              placeholderTextColor="#94a3b8"
+              secureTextEntry
+            />
+            
+            <TouchableOpacity style={styles.saveBtn} onPress={handleSavePassword} disabled={savingPassword}>
+              {savingPassword ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Actualizar Contraseña</Text>}
             </TouchableOpacity>
           </View>
         </View>

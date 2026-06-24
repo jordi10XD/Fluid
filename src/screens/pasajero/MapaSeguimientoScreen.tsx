@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, StatusBar, Dimensions,
-  Modal, TextInput, ActivityIndicator, Image,
+  Modal, TextInput, ActivityIndicator, Image, Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import MapView, { PROVIDER_GOOGLE, Marker } from 'react-native-maps';
@@ -22,6 +22,59 @@ export default function MapaSeguimientoScreen({ route, navigation }: any) {
   const [assistMsg, setAssistMsg] = useState('');
   const [assistSeverity, setAssistSeverity] = useState('Moderado');
   const [isSubmittingAssist, setIsSubmittingAssist] = useState(false);
+  const [activeAlert, setActiveAlert] = useState<any | null>(null);
+
+  // Subscribe to changes in the selected trip's state (detect when driver ends the trip)
+  useEffect(() => {
+    if (!selectedBus?.trip_id) return;
+
+    const tripId = selectedBus.trip_id;
+    const channelName = `realtime_trip_status_${tripId}_${Math.random()}`;
+    const channel = supabase
+      .channel(channelName)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'trips', filter: `id=eq.${tripId}` },
+        (payload: any) => {
+          if (payload.new && payload.new.estado === 'Finalizado') {
+            Alert.alert(
+              'Viaje Finalizado',
+              'El viaje ha finalizado. Gracias por viajar con nosotros.',
+              [{ text: 'Entendido', onPress: () => navigation.goBack() }]
+            );
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [selectedBus?.trip_id]);
+
+  // Subscribe to driver incidents in real-time
+  useEffect(() => {
+    if (!selectedBus?.trips?.conductor_id) return;
+
+    const conductorId = selectedBus.trips.conductor_id;
+    const channelName = `realtime_incidents_${conductorId}_${Math.random()}`;
+    const channel = supabase
+      .channel(channelName)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'incidencias', filter: `conductor_id=eq.${conductorId}` },
+        (payload: any) => {
+          if (payload.new) {
+            setActiveAlert(payload.new);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [selectedBus?.trips?.conductor_id]);
 
   const handleSendAssist = async () => {
     if (!assistMsg.trim()) {
@@ -314,6 +367,33 @@ export default function MapaSeguimientoScreen({ route, navigation }: any) {
           <Ionicons name="person-circle-outline" size={28} color={Colors.white} />
         </TouchableOpacity>
       </View>
+
+      {/* Banner de Incidencia del Conductor en Vivo */}
+      {activeAlert && (
+        <View style={[
+          styles.incidentBanner,
+          activeAlert.severidad === 'Crítico' ? styles.bannerCritical : 
+          activeAlert.severidad === 'Moderado' ? styles.bannerModerate : styles.bannerLow
+        ]}>
+          <View style={styles.bannerIconContainer}>
+            <Ionicons 
+              name={activeAlert.severidad === 'Crítico' ? 'alert-circle' : 'warning'} 
+              size={24} 
+              color={Colors.white} 
+            />
+          </View>
+          <View style={styles.bannerTextContainer}>
+            <Text style={styles.bannerTitle}>REPORTE EN VIVO: {activeAlert.tipo?.toUpperCase()}</Text>
+            <Text style={styles.bannerDescription}>{activeAlert.descripcion}</Text>
+          </View>
+          <TouchableOpacity 
+            style={styles.bannerCloseBtn} 
+            onPress={() => setActiveAlert(null)}
+          >
+            <Text style={styles.bannerCloseText}>OK</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Map */}
       <View style={styles.mapContainer}>
@@ -728,5 +808,56 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
     color: Colors.textPrimary,
+  },
+  incidentBanner: {
+    position: 'absolute',
+    top: 105,
+    left: Spacing.md,
+    right: Spacing.md,
+    zIndex: 100,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: Spacing.md,
+    borderRadius: Radius.md,
+    ...Shadow.lg,
+  },
+  bannerCritical: {
+    backgroundColor: '#EF4444',
+  },
+  bannerModerate: {
+    backgroundColor: '#F59E0B',
+  },
+  bannerLow: {
+    backgroundColor: '#00B4D8',
+  },
+  bannerIconContainer: {
+    marginRight: Spacing.sm,
+  },
+  bannerTextContainer: {
+    flex: 1,
+  },
+  bannerTitle: {
+    color: Colors.white,
+    fontWeight: '800',
+    fontSize: 12,
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  bannerDescription: {
+    color: Colors.white,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  bannerCloseBtn: {
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: Radius.sm,
+    marginLeft: Spacing.sm,
+  },
+  bannerCloseText: {
+    color: Colors.white,
+    fontSize: 12,
+    fontWeight: '800',
   },
 });

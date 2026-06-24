@@ -199,6 +199,12 @@ export default function PerfilUsuarioScreen({ navigation }: any) {
   const handleMenuPress = (item: any) => {
     if (item.title === 'Mis Datos') {
       openMisDatos();
+    } else if (item.title === 'Notificaciones') {
+      if (role === 'conductor') {
+        navigation.navigate('HistorialNotificacionesConductor');
+      } else {
+        navigation.navigate('Alertas');
+      }
     } else {
       Alert.alert("En desarrollo", "Esta sección estará disponible pronto.");
     }

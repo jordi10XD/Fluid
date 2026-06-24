@@ -201,14 +201,14 @@ export default function PanelGlobalMonitoreoScreen() {
       >
         {buses.map((bus) => (
           <Marker
-            key={bus.id}
+            key={`${bus.id}_${selectedBus === bus.id ? 'active' : 'inactive'}`}
             coordinate={{ latitude: bus.lat, longitude: bus.lng }}
             onPress={() => setSelectedBus(bus.id === selectedBus ? null : bus.id)}
           >
             <View style={styles.markerWrap}>
               {selectedBus === bus.id && (
                 <View style={[styles.markerLabel, { borderColor: BUS_COLOR[bus.status] }]}>
-                  <Text style={[styles.markerLabelText, { color: BUS_COLOR[bus.status] }]}>
+                  <Text style={[styles.markerLabelText, { color: BUS_COLOR[bus.status] }]} numberOfLines={1}>
                     UNIDAD {bus.unidad_numero} · {bus.route}
                   </Text>
                 </View>

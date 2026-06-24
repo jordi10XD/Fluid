@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   StatusBar, KeyboardAvoidingView, Platform, Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, Shadow } from '../../theme/colors';
@@ -12,6 +13,7 @@ import { makeRedirectUri } from 'expo-auth-session';
 export default function ForgotPasswordScreen({ navigation }: any) {
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const redirectUri = makeRedirectUri({
     scheme: 'com.logicube.fluidapp',
@@ -20,6 +22,7 @@ export default function ForgotPasswordScreen({ navigation }: any) {
 
   const handleReset = async () => {
     if (!email) return;
+    setLoading(true);
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: redirectUri
@@ -28,6 +31,8 @@ export default function ForgotPasswordScreen({ navigation }: any) {
       setSent(true);
     } catch (err: any) {
       Alert.alert('Error', err.message || 'No se pudo enviar el correo de recuperación.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -65,11 +70,18 @@ export default function ForgotPasswordScreen({ navigation }: any) {
           </View>
 
           <TouchableOpacity
-            style={styles.sendBtn}
+            style={[styles.sendBtn, loading && { opacity: 0.7 }]}
             onPress={handleReset}
+            disabled={loading}
           >
-            <Text style={styles.sendBtnText}>Enviar Código</Text>
-            <Ionicons name="arrow-forward" size={18} color={Colors.white} />
+            {loading ? (
+              <ActivityIndicator color={Colors.white} />
+            ) : (
+              <>
+                <Text style={styles.sendBtnText}>Enviar Código</Text>
+                <Ionicons name="arrow-forward" size={18} color={Colors.white} />
+              </>
+            )}
           </TouchableOpacity>
 
           {sent && (

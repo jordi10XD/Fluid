@@ -15,6 +15,7 @@ import PerfilUsuarioScreen from '../screens/pasajero/PerfilUsuarioScreen';
 // Conductor screens
 import DashboardConductorScreen from '../screens/conductor/DashboardConductorScreen';
 import MapaNavegacionScreen from '../screens/conductor/MapaNavegacionScreen';
+import HistorialNotificacionesConductorScreen from '../screens/conductor/HistorialNotificacionesConductorScreen';
 
 // Admin screens
 import PanelGlobalMonitoreoScreen from '../screens/admin/monitoreo/PanelGlobalMonitoreoScreen';
@@ -51,6 +52,7 @@ export function ConductorStackNav() {
       <ConductorStack.Screen name="DashboardConductor" component={DashboardConductorScreen} />
       <ConductorStack.Screen name="MapaNavegacion" component={MapaNavegacionScreen} />
       <ConductorStack.Screen name="Perfil" component={PerfilUsuarioScreen} />
+      <ConductorStack.Screen name="HistorialNotificacionesConductor" component={HistorialNotificacionesConductorScreen} />
     </ConductorStack.Navigator>
   );
 }

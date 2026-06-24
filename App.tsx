@@ -3,7 +3,9 @@ import React, { useEffect } from 'react';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import * as Linking from 'expo-linking';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, View, LogBox, Alert } from 'react-native';
+
+LogBox.ignoreAllLogs();
 
 import { supabase } from './src/lib/supabase';
 import { RoleProvider, useRole } from './src/context/RoleContext';
@@ -38,6 +40,42 @@ function RootNavigator() {
   const { role, setRole, setUserName, setSupabaseUserId, isLoading, setIsLoading } = useRole();
   
   React.useEffect(() => {
+    let userChannel: any = null;
+
+    const subscribeToUserChanges = (userId: string) => {
+      if (userChannel) {
+        supabase.removeChannel(userChannel);
+      }
+      userChannel = supabase
+        .channel(`current_user_changes_${userId}`)
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'users', filter: `id=eq.${userId}` },
+          async (payload) => {
+            if (payload.new) {
+              const newUserData = payload.new;
+              if (newUserData.blocked) {
+                Alert.alert('Acceso Restringido', 'Tu cuenta ha sido bloqueada por el administrador.');
+                await supabase.auth.signOut();
+                return;
+              }
+              let finalRole = 'pasajero';
+              if (newUserData.role === 'admin') finalRole = 'admin';
+              else if (newUserData.role === 'operator') finalRole = 'conductor';
+              setRole(finalRole as any);
+
+              let name = newUserData.nombres || '';
+              if (finalRole === 'conductor') {
+                const { data: driverData } = await supabase.from('driver_profiles').select('nombre').eq('id', userId).maybeSingle();
+                if (driverData && driverData.nombre) name = driverData.nombre;
+              }
+              setUserName(name);
+            }
+          }
+        )
+        .subscribe();
+    };
+
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
@@ -49,6 +87,13 @@ function RootNavigator() {
             .maybeSingle();
 
           if (userData) {
+            if (userData.blocked) {
+              Alert.alert('Acceso Restringido', 'Tu cuenta ha sido bloqueada por el administrador.');
+              await supabase.auth.signOut();
+              setIsLoading(false);
+              return;
+            }
+
             setSupabaseUserId(session.user.id);
             let finalRole = 'pasajero';
             let name = userData.nombres || session.user.email?.split('@')[0];
@@ -63,6 +108,8 @@ function RootNavigator() {
 
             setRole(finalRole as any);
             setUserName(name || '');
+            subscribeToUserChanges(session.user.id);
+
             if (navigationRef.isReady()) {
               navigationRef.navigate('App' as never);
             } else {
@@ -81,14 +128,23 @@ function RootNavigator() {
 
     const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT') {
+        if (userChannel) {
+          supabase.removeChannel(userChannel);
+          userChannel = null;
+        }
         if (navigationRef.isReady()) {
           navigationRef.navigate('Login' as never);
         }
+      } else if (event === 'SIGNED_IN' && session?.user) {
+        subscribeToUserChanges(session.user.id);
       }
     });
 
     return () => {
       authListener.subscription.unsubscribe();
+      if (userChannel) {
+        supabase.removeChannel(userChannel);
+      }
     };
   }, []);
 

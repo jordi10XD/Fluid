@@ -13,11 +13,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors, Spacing } from '../../../theme/colors';
 
-// ── Los 4 tabs ────────────────────────────────────────────────────────────────
+// Los 5 tabs
 import UnidadesTab    from './tabs/UnidadesTab';
-import RutasTab       from './tabs/RutasTab';         // crear siguiendo UnidadesTab
-import ConductoresTab from './tabs/ConductoresTab';   // ídem
-import HorariosTab    from './tabs/HorariosTab';      // ídem
+import RutasTab       from './tabs/RutasTab';
+import ConductoresTab from './tabs/ConductoresTab';
+import HorariosTab    from './tabs/HorariosTab';
+import UsuariosTab    from './tabs/UsuariosTab';
 
 // ─── Tipos de navegación ──────────────────────────────────────────────────────
 export type ControlTabParamList = {
@@ -25,6 +26,7 @@ export type ControlTabParamList = {
   Rutas:       undefined;
   Conductores: undefined;
   Horarios:    undefined;
+  Usuarios:    undefined;
 };
 
 const Tab = createMaterialTopTabNavigator<ControlTabParamList>();
@@ -55,6 +57,7 @@ export default function ControlScreen() {
         <Tab.Screen name="Rutas"       component={RutasTab} />
         <Tab.Screen name="Conductores" component={ConductoresTab} />
         <Tab.Screen name="Horarios"    component={HorariosTab} />
+        <Tab.Screen name="Usuarios"    component={UsuariosTab} />
       </Tab.Navigator>
     </View>
   );

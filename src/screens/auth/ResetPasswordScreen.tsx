@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, StatusBar, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, StatusBar, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, Shadow } from '../../theme/colors';
 import { supabase } from '../../lib/supabase';
 
 export default function ResetPasswordScreen({ navigation }: any) {
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleUpdate = async () => {
     if (!password) {
       Alert.alert('Error', 'Debes ingresar una contraseña');
       return;
     }
+    setLoading(true);
     try {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
@@ -21,6 +23,8 @@ export default function ResetPasswordScreen({ navigation }: any) {
       navigation.replace('Login');
     } catch (err: any) {
       Alert.alert('Error', err.message || 'No se pudo actualizar la contraseña.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -54,11 +58,18 @@ export default function ResetPasswordScreen({ navigation }: any) {
           </View>
 
           <TouchableOpacity
-            style={styles.sendBtn}
+            style={[styles.sendBtn, loading && { opacity: 0.7 }]}
             onPress={handleUpdate}
+            disabled={loading}
           >
-            <Text style={styles.sendBtnText}>Actualizar Contraseña</Text>
-            <Ionicons name="checkmark" size={18} color={Colors.white} />
+            {loading ? (
+              <ActivityIndicator color={Colors.white} />
+            ) : (
+              <>
+                <Text style={styles.sendBtnText}>Actualizar Contraseña</Text>
+                <Ionicons name="checkmark" size={18} color={Colors.white} />
+              </>
+            )}
           </TouchableOpacity>
         </View>
       </View>

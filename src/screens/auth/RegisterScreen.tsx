@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, KeyboardAvoidingView, Platform, StatusBar, Alert
+  ScrollView, KeyboardAvoidingView, Platform, StatusBar, Alert,
+  ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
@@ -18,6 +19,7 @@ export default function RegisterScreen({ navigation, route }: any) {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [isGoogleFlow, setIsGoogleFlow] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (route.params?.prefillEmail) {
@@ -41,6 +43,7 @@ export default function RegisterScreen({ navigation, route }: any) {
   };
 
   const handleGoogleRegister = async () => {
+    setLoading(true);
     try {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -88,6 +91,8 @@ export default function RegisterScreen({ navigation, route }: any) {
     } catch (error: any) {
       console.error(error);
       Alert.alert('Error', error.message || 'No se pudo iniciar sesión con Google');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -97,59 +102,72 @@ export default function RegisterScreen({ navigation, route }: any) {
       return;
     }
 
+    setLoading(true);
     try {
-      let userId: string | undefined;
-
       if (isGoogleFlow) {
         const { data, error: userError } = await supabase.auth.getUser();
         if (userError) throw userError;
-        userId = data.user?.id;
+        const userId = data.user?.id;
+
+        if (userId) {
+          // Check if email is registered as a driver by the admin
+          const { data: driverData } = await supabase
+            .from('driver_profiles')
+            .select('id')
+            .eq('email', email.trim())
+            .maybeSingle();
+
+          const finalRole = driverData ? 'operator' : 'passenger';
+
+          // For Google flow, we are already authenticated, so we can update our user profile
+          const { error: updateError } = await supabase
+            .from('users')
+            .update({
+              nombres: nombres.trim(),
+              apellidos: apellidos.trim(),
+              telefono: phone.trim(),
+              role: finalRole,
+            })
+            .eq('id', userId);
+
+          if (updateError) throw updateError;
+
+          // If it's a driver, link their profile to the new auth UUID
+          if (driverData) {
+            await supabase
+              .from('driver_profiles')
+              .update({ id: userId })
+              .eq('email', email.trim());
+          }
+        }
       } else {
-        const { data, error: signUpError } = await supabase.auth.signUp({
+        // For email/password signup, pass details as user metadata so the SECURITY DEFINER trigger can write them safely
+        const { error: signUpError } = await supabase.auth.signUp({
           email: email.trim(),
           password,
+          options: {
+            data: {
+              nombres: nombres.trim(),
+              apellidos: apellidos.trim(),
+              telefono: phone.trim(),
+            }
+          }
         });
         if (signUpError) throw signUpError;
-        userId = data.user?.id;
       }
 
-      if (userId) {
-        // Check if email is registered as a driver by the admin
-        const { data: driverData } = await supabase
-          .from('driver_profiles')
-          .select('id')
-          .eq('email', email.trim())
-          .maybeSingle();
-
-        const finalRole = driverData ? 'operator' : 'passenger';
-
-        const { error: insertError } = await supabase.from('users').insert({
-          id: userId,
-          email: email.trim(),
-          nombres: nombres.trim(),
-          apellidos: apellidos.trim(),
-          telefono: phone.trim(),
-          role: finalRole,
-        });
-
-        if (insertError) throw insertError;
-
-        // If it's a driver, link their profile to the new auth UUID
-        if (driverData) {
-          await supabase
-            .from('driver_profiles')
-            .update({ id: userId })
-            .eq('email', email.trim());
-        }
-
-        if (insertError) throw insertError;
-
-        Alert.alert('Éxito', 'Cuenta creada exitosamente.');
-        await supabase.auth.signOut();
-        navigation.navigate('Login', { prefillEmail: email });
-      }
+      Alert.alert(
+        'Éxito',
+        isGoogleFlow 
+          ? 'Cuenta creada exitosamente.'
+          : 'Registro exitoso. Por favor, revisa tu correo electrónico para confirmar tu cuenta antes de iniciar sesión.'
+      );
+      await supabase.auth.signOut();
+      navigation.navigate('Login', { prefillEmail: email });
     } catch (err: any) {
       Alert.alert('Error', err.message || 'No se pudo crear la cuenta.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -171,8 +189,9 @@ export default function RegisterScreen({ navigation, route }: any) {
         {!isGoogleFlow && (
           <View style={{ width: '100%', marginBottom: Spacing.lg }}>
             <TouchableOpacity 
-              style={[styles.socialBtn, { marginBottom: Spacing.md }]}
+              style={[styles.socialBtn, { marginBottom: Spacing.md }, loading && { opacity: 0.7 }]}
               onPress={handleGoogleRegister}
+              disabled={loading}
             >
               <Ionicons name="logo-google" size={20} color={Colors.textPrimary} />
               <Text style={styles.socialText}>Registrarse con Google</Text>
@@ -247,10 +266,15 @@ export default function RegisterScreen({ navigation, route }: any) {
           </View>
 
           <TouchableOpacity
-            style={styles.registerBtn}
+            style={[styles.registerBtn, loading && { opacity: 0.7 }]}
             onPress={handleRegister}
+            disabled={loading}
           >
-            <Text style={styles.registerBtnText}>Registrarse</Text>
+            {loading ? (
+              <ActivityIndicator color={Colors.white} />
+            ) : (
+              <Text style={styles.registerBtnText}>Registrarse</Text>
+            )}
           </TouchableOpacity>
         </View>
 
